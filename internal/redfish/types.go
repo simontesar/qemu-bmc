@@ -35,6 +35,10 @@ type ComputerSystem struct {
 	ODataEtag    string                `json:"@odata.etag,omitempty"`
 	ID           string                `json:"Id"`
 	Name         string                `json:"Name"`
+	UUID         string                `json:"UUID,omitempty"`
+	Manufacturer string                `json:"Manufacturer,omitempty"`
+	Model        string                `json:"Model,omitempty"`
+	SerialNumber string                `json:"SerialNumber,omitempty"`
 	PowerState   string                `json:"PowerState"`
 	Boot         BootSource            `json:"Boot"`
 	Actions      ComputerSystemActions `json:"Actions"`
@@ -101,10 +105,19 @@ type Manager struct {
 	ODataType    string  `json:"@odata.type"`
 	ODataID      string  `json:"@odata.id"`
 	ODataContext string  `json:"@odata.context,omitempty"`
-	ID           string  `json:"Id"`
-	Name         string  `json:"Name"`
-	ManagerType  string  `json:"ManagerType"`
-	VirtualMedia ODataID `json:"VirtualMedia"`
+	ID           string        `json:"Id"`
+	Name         string        `json:"Name"`
+	ManagerType  string        `json:"ManagerType"`
+	PowerState   string        `json:"PowerState,omitempty"`
+	Status       ResourceStatus `json:"Status,omitempty"`
+	VirtualMedia ODataID       `json:"VirtualMedia"`
+}
+
+// ResourceStatus is the standard Redfish Status object (State/Health). Clients
+// like metal-operator map Manager.Status.State onto the BMC's state.
+type ResourceStatus struct {
+	State  string `json:"State,omitempty"`
+	Health string `json:"Health,omitempty"`
 }
 
 // VirtualMediaCollection is a collection of virtual media

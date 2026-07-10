@@ -38,12 +38,16 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 	etag := generateETag(powerState, boot)
 
 	system := ComputerSystem{
-		ODataType: "#ComputerSystem.v1_5_0.ComputerSystem",
-		ODataID:   "/redfish/v1/Systems/1",
-		ODataEtag: etag,
-		ID:        "1",
-		Name:      "QEMU Virtual Machine",
-		PowerState: powerState,
+		ODataType:    "#ComputerSystem.v1_5_0.ComputerSystem",
+		ODataID:      "/redfish/v1/Systems/1",
+		ODataEtag:    etag,
+		ID:           "1",
+		Name:         "QEMU Virtual Machine",
+		UUID:         s.uuid,
+		Manufacturer: s.manufacturer,
+		Model:        s.model,
+		SerialNumber: s.serial,
+		PowerState:   powerState,
 		Boot: BootSource{
 			BootSourceOverrideEnabled: boot.Enabled,
 			BootSourceOverrideTarget:  boot.Target,

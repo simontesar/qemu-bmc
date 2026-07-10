@@ -26,6 +26,11 @@ func (s *Server) handleGetManager(w http.ResponseWriter, r *http.Request) {
 		ID:           "1",
 		Name:         "QEMU BMC",
 		ManagerType:  "BMC",
+		// The BMC/Manager is always running while the container is up. Clients
+		// (e.g. metal-operator bmc_controller.go) read manager.PowerState and
+		// manager.Status.State to decide the BMC is reachable/enabled.
+		PowerState:   "On",
+		Status:       ResourceStatus{State: "Enabled", Health: "OK"},
 		VirtualMedia: ODataID{ODataID: "/redfish/v1/Managers/1/VirtualMedia"},
 	}
 	w.Header().Set("Content-Type", "application/json")

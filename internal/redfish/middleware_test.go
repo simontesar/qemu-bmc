@@ -13,8 +13,9 @@ func TestBasicAuth(t *testing.T) {
 	mock := newMockMachine(qmp.StatusRunning)
 	srv := NewServer(mock, "admin", "password", "")
 
+	// A protected resource requires auth.
 	t.Run("valid credentials returns 200", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/redfish/v1", nil)
+		req := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
 		req.SetBasicAuth("admin", "password")
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
@@ -23,7 +24,7 @@ func TestBasicAuth(t *testing.T) {
 	})
 
 	t.Run("wrong password returns 401", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/redfish/v1", nil)
+		req := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
 		req.SetBasicAuth("admin", "wrong")
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
@@ -32,11 +33,21 @@ func TestBasicAuth(t *testing.T) {
 	})
 
 	t.Run("no auth returns 401", func(t *testing.T) {
-		req := httptest.NewRequest("GET", "/redfish/v1", nil)
+		req := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
 		w := httptest.NewRecorder()
 		srv.ServeHTTP(w, req)
 
 		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+
+	// Per DSP0266 §9.2 the service root is unauthenticated so clients can
+	// bootstrap the service before authenticating (e.g. gofish).
+	t.Run("service root is public (no auth) returns 200", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/redfish/v1", nil)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
 

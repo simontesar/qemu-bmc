@@ -17,24 +17,34 @@ type Config struct {
 	QEMUBinary     string // QEMU binary path for process management mode
 	PowerOnAtStart bool   // Power on VM at container start
 	VNCAddr        string // VNC TCP address for noVNC proxy
+	// Redfish ComputerSystem inventory — required by clients like metal-operator
+	// that key server discovery on ComputerSystem.UUID.
+	SystemUUID         string
+	SystemManufacturer string
+	SystemModel        string
+	SystemSerial       string
 }
 
 // Load reads configuration from environment variables with defaults
 func Load() *Config {
 	return &Config{
-		QMPSocket:      getEnv("QMP_SOCK", "/var/run/qemu/qmp.sock"),
-		IPMIUser:       getEnv("IPMI_USER", "admin"),
-		IPMIPass:       getEnv("IPMI_PASS", "password"),
-		RedfishPort:    getEnv("REDFISH_PORT", "443"),
-		IPMIPort:       getEnv("IPMI_PORT", "623"),
-		SerialAddr:     getEnv("SERIAL_ADDR", "localhost:9002"),
-		TLSCert:        getEnv("TLS_CERT", ""),
-		TLSKey:         getEnv("TLS_KEY", ""),
-		VMBootMode:     getEnv("VM_BOOT_MODE", "bios"),
-		VMIPMIAddr:     getEnv("VM_IPMI_ADDR", ""),
-		QEMUBinary:     getEnv("QEMU_BINARY", "qemu-system-x86_64"),
-		PowerOnAtStart: getBoolEnv("POWER_ON_AT_START", false),
-		VNCAddr:        getEnv("VNC_ADDR", "localhost:5900"),
+		QMPSocket:          getEnv("QMP_SOCK", "/var/run/qemu/qmp.sock"),
+		IPMIUser:           getEnv("IPMI_USER", "admin"),
+		IPMIPass:           getEnv("IPMI_PASS", "password"),
+		RedfishPort:        getEnv("REDFISH_PORT", "443"),
+		IPMIPort:           getEnv("IPMI_PORT", "623"),
+		SerialAddr:         getEnv("SERIAL_ADDR", "localhost:9002"),
+		TLSCert:            getEnv("TLS_CERT", ""),
+		TLSKey:             getEnv("TLS_KEY", ""),
+		VMBootMode:         getEnv("VM_BOOT_MODE", "bios"),
+		VMIPMIAddr:         getEnv("VM_IPMI_ADDR", ""),
+		QEMUBinary:         getEnv("QEMU_BINARY", "qemu-system-x86_64"),
+		PowerOnAtStart:     getBoolEnv("POWER_ON_AT_START", false),
+		VNCAddr:            getEnv("VNC_ADDR", "localhost:5900"),
+		SystemUUID:         getEnv("SYSTEM_UUID", ""),
+		SystemManufacturer: getEnv("SYSTEM_MANUFACTURER", "QEMU"),
+		SystemModel:        getEnv("SYSTEM_MODEL", "Standard PC (Q35 + ICH9, 2009)"),
+		SystemSerial:       getEnv("SYSTEM_SERIAL", ""),
 	}
 }
 

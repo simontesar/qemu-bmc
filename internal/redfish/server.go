@@ -28,6 +28,21 @@ type Server struct {
 	pass         string
 	currentMedia string
 	novncHandler *novnc.Handler
+	// ComputerSystem inventory surfaced at /redfish/v1/Systems/1.
+	uuid         string
+	manufacturer string
+	model        string
+	serial       string
+}
+
+// SetSystemInfo populates the ComputerSystem inventory (UUID/Manufacturer/Model/
+// SerialNumber) returned by /redfish/v1/Systems/1. Clients such as
+// metal-operator require a non-empty UUID for server discovery.
+func (s *Server) SetSystemInfo(uuid, manufacturer, model, serial string) {
+	s.uuid = uuid
+	s.manufacturer = manufacturer
+	s.model = model
+	s.serial = serial
 }
 
 // NewServer creates a new Redfish server

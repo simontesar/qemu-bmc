@@ -103,6 +103,7 @@ func main() {
 
 	// Start Redfish server
 	redfishServer := redfish.NewServer(m, cfg.IPMIUser, cfg.IPMIPass, cfg.VNCAddr)
+	redfishServer.SetSystemInfo(cfg.SystemUUID, cfg.SystemManufacturer, cfg.SystemModel, cfg.SystemSerial)
 	addr := fmt.Sprintf(":%s", cfg.RedfishPort)
 	log.Printf("Starting Redfish server on %s", addr)
 
