@@ -20,6 +20,14 @@ QEMU_ARGS="$QEMU_ARGS -m ${VM_MEMORY:-2048} -smp ${VM_CPUS:-2}"
 
 # Disk
 VM_DISK="${VM_DISK:-/vm/disk.qcow2}"
+# Auto-create an empty backing disk when a size is requested (opt-in via VM_DISK_SIZE)
+# and none exists yet. This lets a netbooted OS install-to-disk (e.g. VyOS `install
+# image`) so a subsequent disk-first boot (VM_BOOT=cn) runs the installed system
+# instead of netbooting again. Only nodes that set VM_DISK_SIZE get a disk.
+if [ -n "$VM_DISK" ] && [ ! -f "$VM_DISK" ] && [ -n "${VM_DISK_SIZE:-}" ]; then
+    echo "Creating empty disk $VM_DISK ($VM_DISK_SIZE)" >&2
+    qemu-img create -f qcow2 "$VM_DISK" "$VM_DISK_SIZE" >&2
+fi
 if [ -n "$VM_DISK" ] && [ -f "$VM_DISK" ]; then
     QEMU_ARGS="$QEMU_ARGS -drive file=$VM_DISK,format=qcow2,if=virtio"
 fi
