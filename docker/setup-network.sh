@@ -8,12 +8,15 @@
 #   source /scripts/setup-network.sh
 #   ARGS=$(build_network_args)
 
-# Generate a deterministic MAC address from interface name
-# Prefix: 52:54:00 (QEMU OUI), remaining 3 bytes from md5(ifname)
+# Generate a deterministic MAC address from interface name.
+# Prefix: 52:54:00 (QEMU OUI), remaining 3 bytes from md5(SYSTEM_UUID + ifname).
+# Seeding with SYSTEM_UUID makes the MACs UNIQUE PER HOST: without it every guest hashes the
+# same ifname to the same MAC, and consumers that key on MAC globally (e.g. Ironic ports are
+# globally unique) collide across hosts. Deterministic per host (stable across reboots).
 generate_mac() {
     local ifname="$1"
     local hash
-    hash=$(echo -n "$ifname" | md5sum | cut -c1-6)
+    hash=$(echo -n "${SYSTEM_UUID:-}:${ifname}" | md5sum | cut -c1-6)
     echo "52:54:00:${hash:0:2}:${hash:2:2}:${hash:4:2}"
 }
 
