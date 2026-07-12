@@ -25,10 +25,15 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y --no-install-recommends \
     qemu-system-x86 \
     qemu-utils \
+    qemu-block-extra \
     iproute2 \
     ovmf \
     ipmitool \
     && rm -rf /var/lib/apt/lists/*
+# qemu-block-extra provides the curl block driver module (block-curl.so). Without it Debian's
+# QEMU 7.2 lists http/https in `-drive format=help` but fails at runtime with
+# "module block-block-curl not found" / "Unknown protocol 'http'" — which breaks attaching a
+# Redfish virtual-media ISO by URL (Ironic redfish-virtualmedia / our cold-start media inject).
 
 RUN mkdir -p /vm /iso /var/run/qemu /var/log/qemu
 
