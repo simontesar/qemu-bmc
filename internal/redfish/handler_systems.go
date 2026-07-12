@@ -60,6 +60,13 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 				AllowableValues: []string{"On", "ForceOff", "GracefulShutdown", "ForceRestart", "GracefulRestart"},
 			},
 		},
+		// Ironic's redfish inspect interface requires Links/ManagedBy to locate the
+		// managing BMC (Managers/1) before it will start inspection / attach virtual media.
+		Links: ComputerSystemLinks{
+			ManagedBy: []ODataID{
+				{ODataID: "/redfish/v1/Managers/1"},
+			},
+		},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

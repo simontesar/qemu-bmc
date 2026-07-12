@@ -63,6 +63,26 @@ func TestGetSystem_PowerState(t *testing.T) {
 	}
 }
 
+func TestGetSystem_ManagedByLink(t *testing.T) {
+	// Ironic's redfish inspect interface requires Links/ManagedBy to point at the
+	// managing BMC (Managers/1); without it, inspection refuses to start.
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var system ComputerSystem
+	err := json.Unmarshal(w.Body.Bytes(), &system)
+	require.NoError(t, err)
+
+	require.Len(t, system.Links.ManagedBy, 1)
+	assert.Equal(t, "/redfish/v1/Managers/1", system.Links.ManagedBy[0].ODataID)
+}
+
 func TestGetSystem_ETag(t *testing.T) {
 	mock := newMockMachine(qmp.StatusRunning)
 	srv := NewServer(mock, "", "", "")

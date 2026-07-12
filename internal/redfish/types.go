@@ -42,6 +42,15 @@ type ComputerSystem struct {
 	PowerState   string                `json:"PowerState"`
 	Boot         BootSource            `json:"Boot"`
 	Actions      ComputerSystemActions `json:"Actions"`
+	Links        ComputerSystemLinks   `json:"Links"`
+}
+
+// ComputerSystemLinks holds related-resource references for a ComputerSystem.
+// Ironic's redfish inspect interface locates the managing BMC via Links/ManagedBy
+// and refuses to start inspection if it is absent ("The attribute Links/ManagedBy
+// is missing from the resource /redfish/v1/Systems/1"). Real BMCs always populate it.
+type ComputerSystemLinks struct {
+	ManagedBy []ODataID `json:"ManagedBy"`
 }
 
 // BootSource represents boot source override
