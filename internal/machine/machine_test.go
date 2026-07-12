@@ -2,6 +2,10 @@ package machine
 
 import (
 	"errors"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -253,9 +257,30 @@ func TestInsertMedia(t *testing.T) {
 	mock := newMockQMPClient(qmp.StatusRunning)
 	m := New(mock)
 
-	err := m.InsertMedia("http://example.com/boot.iso")
+	// A local path is attached as-is (no download).
+	err := m.InsertMedia("/iso/boot.iso")
 	require.NoError(t, err)
 	assert.Contains(t, mock.Calls(), "BlockdevChangeMedium")
+}
+
+func TestFetchMedia(t *testing.T) {
+	// A local path passes through unchanged.
+	got, err := fetchMedia("/iso/local.iso", "/tmp/unused.iso")
+	require.NoError(t, err)
+	assert.Equal(t, "/iso/local.iso", got)
+
+	// An http(s) URL is downloaded to dst, and dst is returned.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte("FAKE-ISO-BYTES"))
+	}))
+	defer srv.Close()
+	dst := filepath.Join(t.TempDir(), "vmedia.iso")
+	got, err = fetchMedia(srv.URL, dst)
+	require.NoError(t, err)
+	assert.Equal(t, dst, got)
+	data, err := os.ReadFile(dst)
+	require.NoError(t, err)
+	assert.Equal(t, "FAKE-ISO-BYTES", string(data))
 }
 
 func TestEjectMedia(t *testing.T) {
@@ -441,8 +466,9 @@ func TestProcessMode_InsertMedia_PersistsForColdStart(t *testing.T) {
 	pm := newMockProcessManager(false)
 	m := NewWithProcess(mockQMP, pm)
 
-	require.NoError(t, m.InsertMedia("http://[fd00:cafe::5]:6180/boot.iso"))
-	assert.Equal(t, "http://[fd00:cafe::5]:6180/boot.iso", pm.media)
+	// Use a local path so no download happens; the persisted value is what a cold start attaches.
+	require.NoError(t, m.InsertMedia("/iso/boot.iso"))
+	assert.Equal(t, "/iso/boot.iso", pm.media)
 	assert.Contains(t, pm.calls, "SetMedia")
 
 	require.NoError(t, m.EjectMedia())

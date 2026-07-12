@@ -2,12 +2,46 @@ package machine
 
 import (
 	"fmt"
+	"io"
 	"log"
+	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/tjst-t/qemu-bmc/internal/qmp"
 )
+
+// vmediaLocalPath is where an http(s) virtual-media image is downloaded before being attached
+// to the ide0-cd0 CD. Booting directly from an http URL via QEMU's curl block driver issues a
+// synchronous range request per sector — glacially slow for a multi-hundred-MB boot ISO — so we
+// fetch the whole image to a local file first and attach that (boots at local disk speed).
+const vmediaLocalPath = "/iso/vmedia.iso"
+
+// fetchMedia downloads an http(s) URL to dst; a non-URL (local path) is returned unchanged.
+func fetchMedia(image, dst string) (string, error) {
+	if !strings.HasPrefix(image, "http://") && !strings.HasPrefix(image, "https://") {
+		return image, nil // already a local file path
+	}
+	resp, err := http.Get(image)
+	if err != nil {
+		return "", fmt.Errorf("GET %s: %w", image, err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("GET %s: unexpected status %s", image, resp.Status)
+	}
+	f, err := os.Create(dst)
+	if err != nil {
+		return "", fmt.Errorf("create %s: %w", dst, err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, resp.Body); err != nil {
+		return "", fmt.Errorf("write %s: %w", dst, err)
+	}
+	return dst, nil
+}
 
 // PowerState represents the power state of the VM
 type PowerState string
@@ -280,21 +314,29 @@ func (m *Machine) ConsumeBootOnce() {
 	}
 }
 
-// InsertMedia inserts virtual media into the VM. It persists the image so a later
-// cold start attaches it (Ironic's redfish-virtualmedia inserts media while the VM is
-// powered OFF, then powers on — the live QMP change-medium below has no running QEMU to
-// target in that case and fails non-fatally; the persisted media is what actually boots).
+// InsertMedia inserts virtual media into the VM. An http(s) image is downloaded to a local
+// file first (see vmediaLocalPath) and the LOCAL path is attached — booting an ISO straight
+// from an http URL via QEMU's curl block driver is impractically slow. It also persists the
+// (local) media so a later cold start attaches it (Ironic's redfish-virtualmedia inserts media
+// while the VM is powered OFF, then powers on — the live QMP change-medium below has no running
+// QEMU to target in that case and fails non-fatally; the persisted media is what actually boots).
 func (m *Machine) InsertMedia(image string) error {
-	if m.processManager != nil {
-		m.processManager.SetMedia(image)
+	local, err := fetchMedia(image, vmediaLocalPath)
+	if err != nil {
+		return fmt.Errorf("fetching virtual media: %w", err)
 	}
-	return m.qmpClient.BlockdevChangeMedium("ide0-cd0", image)
+	if m.processManager != nil {
+		m.processManager.SetMedia(local)
+	}
+	return m.qmpClient.BlockdevChangeMedium("ide0-cd0", local)
 }
 
-// EjectMedia ejects virtual media from the VM and clears the persisted cold-start media.
+// EjectMedia ejects virtual media from the VM, clears the persisted cold-start media, and
+// removes the downloaded local image file.
 func (m *Machine) EjectMedia() error {
 	if m.processManager != nil {
 		m.processManager.SetMedia("")
 	}
+	_ = os.Remove(vmediaLocalPath)
 	return m.qmpClient.BlockdevRemoveMedium("ide0-cd0")
 }
