@@ -31,6 +31,7 @@ type ProcessManager interface {
 	Kill() error
 	IsRunning() bool
 	WaitForExit(timeout time.Duration) error
+	SetMedia(image string)
 }
 
 // Machine manages the state of a QEMU VM
@@ -279,12 +280,21 @@ func (m *Machine) ConsumeBootOnce() {
 	}
 }
 
-// InsertMedia inserts virtual media into the VM
+// InsertMedia inserts virtual media into the VM. It persists the image so a later
+// cold start attaches it (Ironic's redfish-virtualmedia inserts media while the VM is
+// powered OFF, then powers on — the live QMP change-medium below has no running QEMU to
+// target in that case and fails non-fatally; the persisted media is what actually boots).
 func (m *Machine) InsertMedia(image string) error {
+	if m.processManager != nil {
+		m.processManager.SetMedia(image)
+	}
 	return m.qmpClient.BlockdevChangeMedium("ide0-cd0", image)
 }
 
-// EjectMedia ejects virtual media from the VM
+// EjectMedia ejects virtual media from the VM and clears the persisted cold-start media.
 func (m *Machine) EjectMedia() error {
+	if m.processManager != nil {
+		m.processManager.SetMedia("")
+	}
 	return m.qmpClient.BlockdevRemoveMedium("ide0-cd0")
 }

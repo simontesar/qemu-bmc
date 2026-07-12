@@ -89,7 +89,13 @@ type mockProcessManager struct {
 	running    bool
 	startCalls []string // boot targets passed to Start
 	calls      []string
+	media      string // last value passed to SetMedia
 	exitCh     chan struct{}
+}
+
+func (m *mockProcessManager) SetMedia(image string) {
+	m.calls = append(m.calls, "SetMedia")
+	m.media = image
 }
 
 func newMockProcessManager(running bool) *mockProcessManager {
@@ -426,4 +432,19 @@ func TestLegacyMode_Reset_ForceOff_StopsQMP(t *testing.T) {
 	err := m.Reset("ForceOff")
 	require.NoError(t, err)
 	assert.Contains(t, mock.Calls(), "Stop")
+}
+
+func TestProcessMode_InsertMedia_PersistsForColdStart(t *testing.T) {
+	// Ironic inserts virtual media while the VM is powered OFF, then powers on. The
+	// image must be persisted to the ProcessManager so the next cold start attaches it.
+	mockQMP := newMockQMPClient(qmp.StatusRunning)
+	pm := newMockProcessManager(false)
+	m := NewWithProcess(mockQMP, pm)
+
+	require.NoError(t, m.InsertMedia("http://[fd00:cafe::5]:6180/boot.iso"))
+	assert.Equal(t, "http://[fd00:cafe::5]:6180/boot.iso", pm.media)
+	assert.Contains(t, pm.calls, "SetMedia")
+
+	require.NoError(t, m.EjectMedia())
+	assert.Equal(t, "", pm.media)
 }

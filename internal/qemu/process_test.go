@@ -153,3 +153,37 @@ func TestProcessManager_Restart_AfterStop(t *testing.T) {
 	defer pm.Kill()
 	assert.True(t, pm.IsRunning())
 }
+
+func TestApplyMedia(t *testing.T) {
+	base := []string{"-nographic", "-drive", "if=ide,index=0,media=cdrom", "-uuid", "x"}
+
+	// Empty media -> unchanged.
+	assert.Equal(t, base, applyMedia(base, ""))
+
+	// Non-empty -> file= appended to the cdrom drive only.
+	got := applyMedia(base, "http://[fd00:cafe::5]:6180/boot.iso")
+	assert.Equal(t, "if=ide,index=0,media=cdrom,file=http://[fd00:cafe::5]:6180/boot.iso", got[2])
+	assert.Equal(t, "-nographic", got[0]) // other args untouched
+
+	// Idempotent-ish: a cdrom that already has file= is left alone.
+	withFile := []string{"-drive", "if=ide,index=0,media=cdrom,file=/existing.iso"}
+	assert.Equal(t, withFile, applyMedia(withFile, "http://new"))
+}
+
+func TestProcessManager_SetMedia_ColdStartAttaches(t *testing.T) {
+	// SetMedia then Start -> the launched args carry the cdrom file.
+	var gotArgs []string
+	factory := func(binary string, args []string) *exec.Cmd {
+		gotArgs = args
+		return exec.Command("sleep", "5")
+	}
+	pm := NewProcessManager("qemu", []string{"-drive", "if=ide,index=0,media=cdrom"}, factory)
+	pm.SetMedia("http://[fd00:cafe::5]:6180/boot.iso")
+	require.NoError(t, pm.Start("Cd"))
+	defer pm.Kill()
+
+	// The cdrom drive carries the inserted media file; ApplyBootOverride("Cd") also
+	// appends "-boot d", so assert on content rather than exact arg count.
+	assert.Contains(t, gotArgs[1], "file=http://[fd00:cafe::5]:6180/boot.iso")
+	assert.Contains(t, gotArgs, "d")
+}

@@ -3,6 +3,7 @@ package qemu
 import (
 	"fmt"
 	"os/exec"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -16,6 +17,12 @@ type ProcessManager interface {
 	IsRunning() bool
 	WaitForExit(timeout time.Duration) error
 	ExitCh() <-chan struct{}
+	// SetMedia records the virtual-media image (a file path or http(s) URL) to
+	// attach to the ide0-cd0 CD drive the NEXT time QEMU cold-starts. Empty ejects.
+	// This is what makes Redfish InsertMedia-while-powered-off work (Ironic's
+	// virtual-media flow inserts media, then powers on): the live QMP change-medium
+	// has no running QEMU to target, so the image is instead baked into the start args.
+	SetMedia(image string)
 }
 
 // CommandFactory creates exec.Cmd instances. Allows test injection.
@@ -32,8 +39,35 @@ type processManager struct {
 	cmdFactory CommandFactory
 	cmd        *exec.Cmd
 	running    bool
+	media      string // virtual media attached to ide0-cd0 on the next cold start ("" = empty)
 	exitCh     chan struct{}
 	mu         sync.RWMutex
+}
+
+// SetMedia records the CD image to attach on the next cold start (see interface doc).
+func (p *processManager) SetMedia(image string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.media = image
+}
+
+// applyMedia injects file=<media> into the empty ide0-cd0 cdrom drive arg so a
+// cold-started QEMU boots the inserted virtual media. No-op if media is empty or the
+// cdrom drive already carries a file. QEMU (7.2, http block driver) accepts an http(s)
+// URL as the drive file, which is what Ironic's redfish-virtualmedia hands the BMC.
+func applyMedia(args []string, media string) []string {
+	if media == "" {
+		return args
+	}
+	out := make([]string, len(args))
+	copy(out, args)
+	for i, a := range out {
+		if strings.Contains(a, "media=cdrom") && !strings.Contains(a, "file=") {
+			out[i] = a + ",file=" + media
+			break
+		}
+	}
+	return out
 }
 
 // NewProcessManager creates a ProcessManager for the given QEMU binary and base arguments.
@@ -55,6 +89,7 @@ func (p *processManager) Start(bootTarget string) error {
 	}
 
 	args := ApplyBootOverride(p.baseArgs, bootTarget)
+	args = applyMedia(args, p.media)
 	p.cmd = p.cmdFactory(p.binary, args)
 	p.cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
