@@ -2,6 +2,8 @@ package redfish
 
 import (
 	"net/http"
+	"sync"
+	"time"
 
 	"github.com/gorilla/mux"
 	"github.com/tjst-t/qemu-bmc/internal/machine"
@@ -20,29 +22,90 @@ type MachineInterface interface {
 	EjectMedia() error
 }
 
+// Inventory holds the static ComputerSystem/Manager/Processor inventory data
+// surfaced by the Redfish API. It's set once via SetInventory before the server
+// starts handling requests, so it needs no locking.
+type Inventory struct {
+	// ComputerSystem inventory surfaced at /redfish/v1/Systems/1.
+	SystemUUID         string
+	SystemManufacturer string
+	SystemModel        string
+	SystemSerial       string
+	SystemSKU          string
+	SystemBiosVersion  string
+	// Manager inventory surfaced at /redfish/v1/Managers/1. Clients such as
+	// metal-operator read Manager.Model/FirmwareVersion, not ComputerSystem's.
+	ManagerModel           string
+	ManagerFirmwareVersion string
+	ManagerManufacturer    string
+	ManagerSerial          string
+	ManagerPartNumber      string
+	// Processor inventory surfaced at /redfish/v1/Systems/1/Processors/1.
+	CPUModel string
+	CPUCount int
+	// Memory inventory surfaced at /redfish/v1/Systems/1 (MemorySummary).
+	MemoryMiB int
+}
+
 // Server is the Redfish HTTP server
 type Server struct {
 	router       *mux.Router
 	machine      MachineInterface
 	user         string
 	pass         string
-	currentMedia string
 	novncHandler *novnc.Handler
-	// ComputerSystem inventory surfaced at /redfish/v1/Systems/1.
-	uuid         string
-	manufacturer string
-	model        string
-	serial       string
+	inventory    Inventory
+
+	// mu guards the runtime-mutable fields below. Chainsaw's own test runs are
+	// serialized (--parallel 1), but the server itself may be polled/patched
+	// concurrently by other real clients (Ironic, metal-operator, a human curl).
+	mu            sync.RWMutex
+	currentMedia  string
+	indicatorLED  string
+	lastResetTime time.Time
 }
 
-// SetSystemInfo populates the ComputerSystem inventory (UUID/Manufacturer/Model/
-// SerialNumber) returned by /redfish/v1/Systems/1. Clients such as
-// metal-operator require a non-empty UUID for server discovery.
-func (s *Server) SetSystemInfo(uuid, manufacturer, model, serial string) {
-	s.uuid = uuid
-	s.manufacturer = manufacturer
-	s.model = model
-	s.serial = serial
+// SetInventory populates the static ComputerSystem/Manager/Processor inventory
+// returned by the Redfish API. Clients such as metal-operator require a
+// non-empty ComputerSystem UUID for server discovery.
+func (s *Server) SetInventory(inv Inventory) {
+	s.inventory = inv
+}
+
+func (s *Server) getCurrentMedia() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.currentMedia
+}
+
+func (s *Server) setCurrentMedia(image string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.currentMedia = image
+}
+
+func (s *Server) getIndicatorLED() string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.indicatorLED
+}
+
+func (s *Server) setIndicatorLED(state string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.indicatorLED = state
+}
+
+func (s *Server) getLastResetTime() time.Time {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.lastResetTime
+}
+
+func (s *Server) setLastResetTime(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.lastResetTime = t
 }
 
 // NewServer creates a new Redfish server
@@ -53,6 +116,7 @@ func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 		user:         user,
 		pass:         pass,
 		novncHandler: novnc.NewHandler(vncAddr),
+		indicatorLED: "Off",
 	}
 	s.setupRoutes()
 	return s
@@ -81,11 +145,19 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Actions/ComputerSystem.Reset", s.handleResetAction).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Actions/ComputerSystem.Reset/", s.handleResetAction).Methods("POST")
 
+	// Processors
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors", s.handleProcessorCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/", s.handleProcessorCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/{procid}", s.handleGetProcessor).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/{procid}/", s.handleGetProcessor).Methods("GET")
+
 	// Managers
 	s.router.HandleFunc("/redfish/v1/Managers", s.handleManagerCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/", s.handleManagerCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}", s.handleGetManager).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/", s.handleGetManager).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Actions/Manager.Reset", s.handleManagerReset).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Actions/Manager.Reset/", s.handleManagerReset).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia", s.handleVirtualMediaCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/", s.handleVirtualMediaCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/{vmid}", s.handleGetVirtualMedia).Methods("GET")

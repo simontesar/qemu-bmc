@@ -34,9 +34,9 @@ func TestGetSystems(t *testing.T) {
 
 func TestGetSystem_PowerState(t *testing.T) {
 	tests := []struct {
-		name           string
-		qmpStatus      qmp.Status
-		expectedPower  string
+		name          string
+		qmpStatus     qmp.Status
+		expectedPower string
 	}{
 		{"running maps to On", qmp.StatusRunning, "On"},
 		{"shutdown maps to Off", qmp.StatusShutdown, "Off"},
@@ -129,6 +129,67 @@ func TestGetSystem_BootOverride(t *testing.T) {
 	assert.Contains(t, system.Boot.AllowableValues, "Pxe")
 	assert.Contains(t, system.Boot.AllowableValues, "Hdd")
 	assert.Contains(t, system.Boot.AllowableValues, "Cd")
+}
+
+func TestGetSystem_Inventory(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+	srv.SetInventory(testInventory)
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var system ComputerSystem
+	err := json.Unmarshal(w.Body.Bytes(), &system)
+	require.NoError(t, err)
+
+	assert.Equal(t, "sku-1", system.SKU)
+	assert.Equal(t, "1.0.0", system.BiosVersion)
+	assert.Equal(t, "Off", system.IndicatorLED)
+	assert.InDelta(t, 2.0, system.MemorySummary.TotalSystemMemoryGiB, 0.001)
+	assert.Equal(t, "/redfish/v1/Systems/1/Processors", system.Processors.ODataID)
+}
+
+func TestPatchIndicatorLED(t *testing.T) {
+	t.Run("IndicatorLED alone succeeds and persists", func(t *testing.T) {
+		mock := newMockMachine(qmp.StatusRunning)
+		srv := NewServer(mock, "", "", "")
+
+		body := `{"IndicatorLED":"Lit"}`
+		req := httptest.NewRequest("PATCH", "/redfish/v1/Systems/1", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusOK, w.Code)
+
+		var system ComputerSystem
+		err := json.Unmarshal(w.Body.Bytes(), &system)
+		require.NoError(t, err)
+		assert.Equal(t, "Lit", system.IndicatorLED)
+
+		getReq := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
+		w2 := httptest.NewRecorder()
+		srv.ServeHTTP(w2, getReq)
+		var system2 ComputerSystem
+		require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &system2))
+		assert.Equal(t, "Lit", system2.IndicatorLED)
+	})
+
+	t.Run("neither Boot nor IndicatorLED returns 400", func(t *testing.T) {
+		mock := newMockMachine(qmp.StatusRunning)
+		srv := NewServer(mock, "", "", "")
+
+		req := httptest.NewRequest("PATCH", "/redfish/v1/Systems/1", strings.NewReader(`{}`))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
 }
 
 func TestPatchBootDevice(t *testing.T) {

@@ -29,20 +29,30 @@ type SystemCollection struct {
 
 // ComputerSystem represents a computer system
 type ComputerSystem struct {
-	ODataType    string                `json:"@odata.type"`
-	ODataID      string                `json:"@odata.id"`
-	ODataContext string                `json:"@odata.context,omitempty"`
-	ODataEtag    string                `json:"@odata.etag,omitempty"`
-	ID           string                `json:"Id"`
-	Name         string                `json:"Name"`
-	UUID         string                `json:"UUID,omitempty"`
-	Manufacturer string                `json:"Manufacturer,omitempty"`
-	Model        string                `json:"Model,omitempty"`
-	SerialNumber string                `json:"SerialNumber,omitempty"`
-	PowerState   string                `json:"PowerState"`
-	Boot         BootSource            `json:"Boot"`
-	Actions      ComputerSystemActions `json:"Actions"`
-	Links        ComputerSystemLinks   `json:"Links"`
+	ODataType     string                `json:"@odata.type"`
+	ODataID       string                `json:"@odata.id"`
+	ODataContext  string                `json:"@odata.context,omitempty"`
+	ODataEtag     string                `json:"@odata.etag,omitempty"`
+	ID            string                `json:"Id"`
+	Name          string                `json:"Name"`
+	UUID          string                `json:"UUID,omitempty"`
+	Manufacturer  string                `json:"Manufacturer,omitempty"`
+	Model         string                `json:"Model,omitempty"`
+	SKU           string                `json:"SKU,omitempty"`
+	SerialNumber  string                `json:"SerialNumber,omitempty"`
+	BiosVersion   string                `json:"BiosVersion,omitempty"`
+	IndicatorLED  string                `json:"IndicatorLED,omitempty"`
+	PowerState    string                `json:"PowerState"`
+	Boot          BootSource            `json:"Boot"`
+	MemorySummary MemorySummary         `json:"MemorySummary"`
+	Processors    ODataID               `json:"Processors"`
+	Actions       ComputerSystemActions `json:"Actions"`
+	Links         ComputerSystemLinks   `json:"Links"`
+}
+
+// MemorySummary describes the central memory for a ComputerSystem.
+type MemorySummary struct {
+	TotalSystemMemoryGiB float64 `json:"TotalSystemMemoryGiB"`
 }
 
 // ComputerSystemLinks holds related-resource references for a ComputerSystem.
@@ -79,7 +89,8 @@ type ResetRequest struct {
 
 // PatchSystemRequest is the request body for patching a system
 type PatchSystemRequest struct {
-	Boot *PatchBootSource `json:"Boot,omitempty"`
+	Boot         *PatchBootSource `json:"Boot,omitempty"`
+	IndicatorLED *string          `json:"IndicatorLED,omitempty"`
 }
 
 // PatchBootSource is the boot source in a patch request
@@ -111,15 +122,27 @@ type ManagerCollection struct {
 
 // Manager represents a BMC manager
 type Manager struct {
-	ODataType    string  `json:"@odata.type"`
-	ODataID      string  `json:"@odata.id"`
-	ODataContext string  `json:"@odata.context,omitempty"`
-	ID           string        `json:"Id"`
-	Name         string        `json:"Name"`
-	ManagerType  string        `json:"ManagerType"`
-	PowerState   string        `json:"PowerState,omitempty"`
-	Status       ResourceStatus `json:"Status,omitempty"`
-	VirtualMedia ODataID       `json:"VirtualMedia"`
+	ODataType       string         `json:"@odata.type"`
+	ODataID         string         `json:"@odata.id"`
+	ODataContext    string         `json:"@odata.context,omitempty"`
+	ID              string         `json:"Id"`
+	Name            string         `json:"Name"`
+	ManagerType     string         `json:"ManagerType"`
+	Manufacturer    string         `json:"Manufacturer,omitempty"`
+	Model           string         `json:"Model,omitempty"`
+	SerialNumber    string         `json:"SerialNumber,omitempty"`
+	PartNumber      string         `json:"PartNumber,omitempty"`
+	FirmwareVersion string         `json:"FirmwareVersion,omitempty"`
+	LastResetTime   string         `json:"LastResetTime,omitempty"`
+	PowerState      string         `json:"PowerState,omitempty"`
+	Status          ResourceStatus `json:"Status,omitempty"`
+	VirtualMedia    ODataID        `json:"VirtualMedia"`
+	Actions         ManagerActions `json:"Actions"`
+}
+
+// ManagerActions contains available actions for a Manager.
+type ManagerActions struct {
+	Reset ResetAction `json:"#Manager.Reset"`
 }
 
 // ResourceStatus is the standard Redfish Status object (State/Health). Clients
@@ -186,4 +209,30 @@ type Chassis struct {
 	ID           string `json:"Id"`
 	Name         string `json:"Name"`
 	ChassisType  string `json:"ChassisType"`
+}
+
+// ProcessorCollection is a collection of processors
+type ProcessorCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// Processor represents a single processor resource
+type Processor struct {
+	ODataType             string `json:"@odata.type"`
+	ODataID               string `json:"@odata.id"`
+	ODataContext          string `json:"@odata.context,omitempty"`
+	ID                    string `json:"Id"`
+	Name                  string `json:"Name"`
+	ProcessorType         string `json:"ProcessorType"`
+	ProcessorArchitecture string `json:"ProcessorArchitecture"`
+	InstructionSet        string `json:"InstructionSet"`
+	Manufacturer          string `json:"Manufacturer"`
+	Model                 string `json:"Model"`
+	MaxSpeedMHz           *int   `json:"MaxSpeedMHz,omitempty"`
+	TotalCores            *int   `json:"TotalCores,omitempty"`
+	TotalThreads          *int   `json:"TotalThreads,omitempty"`
 }

@@ -1,6 +1,9 @@
 package config
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 // Config holds the application configuration
 type Config struct {
@@ -23,28 +26,58 @@ type Config struct {
 	SystemManufacturer string
 	SystemModel        string
 	SystemSerial       string
+	// Redfish Manager inventory — clients like metal-operator (bmc_controller.go)
+	// read Manager.Model and Manager.FirmwareVersion, not ComputerSystem's.
+	ManagerModel          string
+	SystemFirmwareVersion string
+	ManagerManufacturer   string
+	ManagerSerial         string
+	ManagerPartNumber     string
+	// Additional ComputerSystem inventory read by metal-operator's GetSystemInfo.
+	SystemSKU         string
+	SystemBiosVersion string
+	// CPU/memory inventory surfaced via ComputerSystem.MemorySummary and the
+	// Processors collection. Reuses VM_CPUS/VM_MEMORY (already consumed by
+	// docker/entrypoint.sh to size the real QEMU VM) rather than separate env
+	// vars, so the reported inventory can't drift from the actual VM.
+	CPUModel  string
+	CPUCount  int
+	MemoryMiB int
 }
 
 // Load reads configuration from environment variables with defaults
 func Load() *Config {
+	systemModel := getEnv("SYSTEM_MODEL", "Standard PC (Q35 + ICH9, 2009)")
+	systemManufacturer := getEnv("SYSTEM_MANUFACTURER", "QEMU")
+	systemSerial := getEnv("SYSTEM_SERIAL", "")
 	return &Config{
-		QMPSocket:          getEnv("QMP_SOCK", "/var/run/qemu/qmp.sock"),
-		IPMIUser:           getEnv("IPMI_USER", "admin"),
-		IPMIPass:           getEnv("IPMI_PASS", "password"),
-		RedfishPort:        getEnv("REDFISH_PORT", "443"),
-		IPMIPort:           getEnv("IPMI_PORT", "623"),
-		SerialAddr:         getEnv("SERIAL_ADDR", "localhost:9002"),
-		TLSCert:            getEnv("TLS_CERT", ""),
-		TLSKey:             getEnv("TLS_KEY", ""),
-		VMBootMode:         getEnv("VM_BOOT_MODE", "bios"),
-		VMIPMIAddr:         getEnv("VM_IPMI_ADDR", ""),
-		QEMUBinary:         getEnv("QEMU_BINARY", "qemu-system-x86_64"),
-		PowerOnAtStart:     getBoolEnv("POWER_ON_AT_START", false),
-		VNCAddr:            getEnv("VNC_ADDR", "localhost:5900"),
-		SystemUUID:         getEnv("SYSTEM_UUID", ""),
-		SystemManufacturer: getEnv("SYSTEM_MANUFACTURER", "QEMU"),
-		SystemModel:        getEnv("SYSTEM_MODEL", "Standard PC (Q35 + ICH9, 2009)"),
-		SystemSerial:       getEnv("SYSTEM_SERIAL", ""),
+		QMPSocket:             getEnv("QMP_SOCK", "/var/run/qemu/qmp.sock"),
+		IPMIUser:              getEnv("IPMI_USER", "admin"),
+		IPMIPass:              getEnv("IPMI_PASS", "password"),
+		RedfishPort:           getEnv("REDFISH_PORT", "443"),
+		IPMIPort:              getEnv("IPMI_PORT", "623"),
+		SerialAddr:            getEnv("SERIAL_ADDR", "localhost:9002"),
+		TLSCert:               getEnv("TLS_CERT", ""),
+		TLSKey:                getEnv("TLS_KEY", ""),
+		VMBootMode:            getEnv("VM_BOOT_MODE", "bios"),
+		VMIPMIAddr:            getEnv("VM_IPMI_ADDR", ""),
+		QEMUBinary:            getEnv("QEMU_BINARY", "qemu-system-x86_64"),
+		PowerOnAtStart:        getBoolEnv("POWER_ON_AT_START", false),
+		VNCAddr:               getEnv("VNC_ADDR", "localhost:5900"),
+		SystemUUID:            getEnv("SYSTEM_UUID", ""),
+		SystemManufacturer:    systemManufacturer,
+		SystemModel:           systemModel,
+		SystemSerial:          systemSerial,
+		ManagerModel:          getEnv("SYSTEM_MANAGER_MODEL", systemModel),
+		SystemFirmwareVersion: getEnv("SYSTEM_FIRMWARE_VERSION", "1.0.0"),
+		ManagerManufacturer:   getEnv("SYSTEM_MANAGER_MANUFACTURER", systemManufacturer),
+		ManagerSerial:         getEnv("SYSTEM_MANAGER_SERIAL", systemSerial),
+		ManagerPartNumber:     getEnv("SYSTEM_MANAGER_PART_NUMBER", ""),
+		SystemSKU:             getEnv("SYSTEM_SKU", ""),
+		SystemBiosVersion:     getEnv("SYSTEM_BIOS_VERSION", "1.0.0"),
+		CPUModel:              getEnv("SYSTEM_CPU_MODEL", "QEMU Virtual CPU"),
+		CPUCount:              getIntEnv("VM_CPUS", 2),
+		MemoryMiB:             getIntEnv("VM_MEMORY", 2048),
 	}
 }
 
@@ -53,6 +86,18 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getIntEnv(key string, defaultValue int) int {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
 }
 
 func getBoolEnv(key string, defaultValue bool) bool {
