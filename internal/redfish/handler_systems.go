@@ -43,11 +43,18 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 		ODataEtag:    etag,
 		ID:           "1",
 		Name:         "QEMU Virtual Machine",
-		UUID:         s.uuid,
-		Manufacturer: s.manufacturer,
-		Model:        s.model,
-		SerialNumber: s.serial,
+		UUID:         s.inventory.SystemUUID,
+		Manufacturer: s.inventory.SystemManufacturer,
+		Model:        s.inventory.SystemModel,
+		SKU:          s.inventory.SystemSKU,
+		SerialNumber: s.inventory.SystemSerial,
+		BiosVersion:  s.inventory.SystemBiosVersion,
+		IndicatorLED: s.getIndicatorLED(),
 		PowerState:   powerState,
+		MemorySummary: MemorySummary{
+			TotalSystemMemoryGiB: float64(s.inventory.MemoryMiB) / 1024,
+		},
+		Processors: ODataID{ODataID: "/redfish/v1/Systems/1/Processors"},
 		Boot: BootSource{
 			BootSourceOverrideEnabled: boot.Enabled,
 			BootSourceOverrideTarget:  boot.Target,
@@ -100,27 +107,33 @@ func (s *Server) handlePatchSystem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Boot == nil {
+	if req.Boot == nil && req.IndicatorLED == nil {
 		writeError(w, http.StatusBadRequest, "PropertyMissing", "no patchable properties provided")
 		return
 	}
 
-	// Get current boot override and merge with patch
-	current := s.machine.GetBootOverride()
+	if req.Boot != nil {
+		// Get current boot override and merge with patch
+		current := s.machine.GetBootOverride()
 
-	if req.Boot.BootSourceOverrideEnabled != "" {
-		current.Enabled = req.Boot.BootSourceOverrideEnabled
-	}
-	if req.Boot.BootSourceOverrideTarget != "" {
-		current.Target = req.Boot.BootSourceOverrideTarget
-	}
-	if req.Boot.BootSourceOverrideMode != "" {
-		current.Mode = req.Boot.BootSourceOverrideMode
+		if req.Boot.BootSourceOverrideEnabled != "" {
+			current.Enabled = req.Boot.BootSourceOverrideEnabled
+		}
+		if req.Boot.BootSourceOverrideTarget != "" {
+			current.Target = req.Boot.BootSourceOverrideTarget
+		}
+		if req.Boot.BootSourceOverrideMode != "" {
+			current.Mode = req.Boot.BootSourceOverrideMode
+		}
+
+		if err := s.machine.SetBootOverride(current); err != nil {
+			writeError(w, http.StatusBadRequest, "PropertyValueError", err.Error())
+			return
+		}
 	}
 
-	if err := s.machine.SetBootOverride(current); err != nil {
-		writeError(w, http.StatusBadRequest, "PropertyValueError", err.Error())
-		return
+	if req.IndicatorLED != nil {
+		s.setIndicatorLED(*req.IndicatorLED)
 	}
 
 	// Return the updated system
