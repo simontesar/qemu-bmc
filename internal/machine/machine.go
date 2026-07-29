@@ -177,7 +177,7 @@ func (m *Machine) Reset(resetType string) error {
 
 func (m *Machine) resetLegacy(resetType string) error {
 	switch resetType {
-	case "On":
+	case "On", "ForceOn":
 		state, err := m.GetPowerState()
 		if err != nil {
 			return err
@@ -197,6 +197,13 @@ func (m *Machine) resetLegacy(resetType string) error {
 		return m.qmpClient.SystemReset()
 	case "GracefulRestart":
 		return m.qmpClient.SystemReset()
+	case "PowerCycle":
+		// Simulate a full power loss/restore (as opposed to ForceRestart's
+		// in-place SystemReset) by pausing then resuming the VM.
+		if err := m.qmpClient.Stop(); err != nil {
+			return err
+		}
+		return m.qmpClient.Cont()
 	default:
 		return fmt.Errorf("unsupported reset type: %s", resetType)
 	}
@@ -204,7 +211,7 @@ func (m *Machine) resetLegacy(resetType string) error {
 
 func (m *Machine) resetProcessMode(resetType string) error {
 	switch resetType {
-	case "On":
+	case "On", "ForceOn":
 		if m.processManager.IsRunning() {
 			return nil // already running
 		}
@@ -224,12 +231,7 @@ func (m *Machine) resetProcessMode(resetType string) error {
 		return nil
 
 	case "ForceOff":
-		if err := m.qmpClient.Quit(); err != nil {
-			// QMP may not be connected; force-kill the process
-			log.Printf("QMP quit failed (%v), killing process", err)
-			return m.processManager.Stop(30 * time.Second)
-		}
-		return m.processManager.WaitForExit(30 * time.Second)
+		return m.forceOff()
 
 	case "ForceRestart":
 		return m.qmpClient.SystemReset()
@@ -254,9 +256,31 @@ func (m *Machine) resetProcessMode(resetType string) error {
 		}
 		return m.resetProcessMode("On")
 
+	case "PowerCycle":
+		// Full power loss/restore: force the process down hard, then start
+		// it back up. Distinct from GracefulRestart (ACPI shutdown first)
+		// and ForceRestart (in-place SystemReset, no power loss).
+		if err := m.forceOff(); err != nil {
+			log.Printf("PowerCycle force-off failed, killing: %v", err)
+			m.processManager.Kill()
+			m.processManager.WaitForExit(5 * time.Second)
+		}
+		return m.resetProcessMode("On")
+
 	default:
 		return fmt.Errorf("unsupported reset type: %s", resetType)
 	}
+}
+
+// forceOff hard-powers-down the process-managed VM: it asks QEMU to quit via
+// QMP, falling back to killing the process if QMP isn't reachable.
+func (m *Machine) forceOff() error {
+	if err := m.qmpClient.Quit(); err != nil {
+		// QMP may not be connected; force-kill the process
+		log.Printf("QMP quit failed (%v), killing process", err)
+		return m.processManager.Stop(30 * time.Second)
+	}
+	return m.processManager.WaitForExit(30 * time.Second)
 }
 
 // waitForQMP polls qmpClient.Connect() until success or timeout.

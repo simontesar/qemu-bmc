@@ -7,10 +7,12 @@ import (
 
 var validResetTypes = map[string]bool{
 	"On":               true,
+	"ForceOn":          true,
 	"ForceOff":         true,
 	"GracefulShutdown": true,
 	"ForceRestart":     true,
 	"GracefulRestart":  true,
+	"PowerCycle":       true,
 }
 
 func (s *Server) handleResetAction(w http.ResponseWriter, r *http.Request) {
