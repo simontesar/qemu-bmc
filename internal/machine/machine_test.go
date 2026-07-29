@@ -213,6 +213,26 @@ func TestReset_GracefulRestart(t *testing.T) {
 	assert.Contains(t, mock.Calls(), "SystemReset")
 }
 
+func TestReset_ForceOn(t *testing.T) {
+	mock := newMockQMPClient(qmp.StatusPaused)
+	m := New(mock)
+
+	err := m.Reset("ForceOn")
+	require.NoError(t, err)
+	assert.Contains(t, mock.Calls(), "Cont")
+}
+
+func TestReset_PowerCycle(t *testing.T) {
+	mock := newMockQMPClient(qmp.StatusRunning)
+	m := New(mock)
+
+	err := m.Reset("PowerCycle")
+	require.NoError(t, err)
+	require.Len(t, mock.Calls(), 2)
+	assert.Equal(t, "Stop", mock.Calls()[0])
+	assert.Equal(t, "Cont", mock.Calls()[1])
+}
+
 func TestReset_InvalidType(t *testing.T) {
 	mock := newMockQMPClient(qmp.StatusRunning)
 	m := New(mock)
@@ -405,6 +425,36 @@ func TestProcessMode_Reset_On_ConsumesBootOnce(t *testing.T) {
 	boot := m.GetBootOverride()
 	assert.Equal(t, "Disabled", boot.Enabled)
 	assert.Equal(t, "None", boot.Target)
+}
+
+func TestProcessMode_Reset_ForceOn_StartsProcess(t *testing.T) {
+	qmpMock := newMockQMPClient(qmp.StatusRunning)
+	pm := newMockProcessManager(false)
+	m := NewWithProcess(qmpMock, pm)
+
+	err := m.Reset("ForceOn")
+	require.NoError(t, err)
+	assert.Contains(t, pm.calls, "Start")
+	assert.Contains(t, qmpMock.Calls(), "Connect")
+}
+
+func TestProcessMode_Reset_PowerCycle(t *testing.T) {
+	qmpMock := newMockQMPClient(qmp.StatusRunning)
+	pm := newMockProcessManager(true)
+	m := NewWithProcess(qmpMock, pm)
+
+	// Simulate the process exiting shortly after Quit is sent, so the
+	// subsequent "On" step can start it back up.
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		pm.running = false
+		close(pm.exitCh)
+	}()
+
+	err := m.Reset("PowerCycle")
+	require.NoError(t, err)
+	assert.Contains(t, qmpMock.Calls(), "Quit")
+	assert.Contains(t, pm.calls, "Start")
 }
 
 func TestProcessMode_Reset_ForceOff_Quits(t *testing.T) {

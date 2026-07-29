@@ -23,6 +23,8 @@ func TestResetAction(t *testing.T) {
 		{"GracefulShutdown", "GracefulShutdown", http.StatusNoContent, "GracefulShutdown"},
 		{"ForceRestart", "ForceRestart", http.StatusNoContent, "ForceRestart"},
 		{"GracefulRestart", "GracefulRestart", http.StatusNoContent, "GracefulRestart"},
+		{"ForceOn", "ForceOn", http.StatusNoContent, "ForceOn"},
+		{"PowerCycle", "PowerCycle", http.StatusNoContent, "PowerCycle"},
 		{"InvalidType returns 400", "InvalidType", http.StatusBadRequest, ""},
 	}
 

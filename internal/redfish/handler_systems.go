@@ -64,7 +64,7 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 		Actions: ComputerSystemActions{
 			Reset: ResetAction{
 				Target:          "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset",
-				AllowableValues: []string{"On", "ForceOff", "GracefulShutdown", "ForceRestart", "GracefulRestart"},
+				AllowableValues: []string{"On", "ForceOn", "ForceOff", "GracefulShutdown", "ForceRestart", "GracefulRestart", "PowerCycle"},
 			},
 		},
 		// Ironic's redfish inspect interface requires Links/ManagedBy to locate the
