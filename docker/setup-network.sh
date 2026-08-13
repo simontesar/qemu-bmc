@@ -88,7 +88,7 @@ build_network_args() {
         setup_bridge "$iface" "$idx"
 
         args="$args -netdev tap,id=net${idx},ifname=${tap},script=no,downscript=no"
-        args="$args -device virtio-net-pci,netdev=net${idx},mac=${mac}"
+        args="$args -device virtio-net-pci,netdev=net${idx},mac=${mac},romfile="
 
         idx=$((idx + 1))
     done
