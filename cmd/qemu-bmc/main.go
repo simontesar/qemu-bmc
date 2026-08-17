@@ -54,6 +54,7 @@ func main() {
 		qmpClient = qmp.NewDisconnectedClient(cfg.QMPSocket)
 		pm := qemu.NewProcessManager(cfg.QEMUBinary, cmdArgs, qemu.DefaultCommandFactory)
 		m = machine.NewWithProcess(qmpClient, pm)
+		m.SetGracefulShutdownTimeout(cfg.GracefulShutdownTimeout)
 
 		if cfg.PowerOnAtStart {
 			log.Printf("Starting QEMU: %s %v", cfg.QEMUBinary, cmdArgs)
