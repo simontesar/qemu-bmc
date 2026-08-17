@@ -19,6 +19,8 @@ import (
 // fetch the whole image to a local file first and attach that (boots at local disk speed).
 const vmediaLocalPath = "/iso/vmedia.iso"
 
+const defaultGracefulShutdownTimeout = 120 * time.Second
+
 // fetchMedia downloads an http(s) URL to dst; a non-URL (local path) is returned unchanged.
 func fetchMedia(image, dst string) (string, error) {
 	if !strings.HasPrefix(image, "http://") && !strings.HasPrefix(image, "https://") {
@@ -70,16 +72,18 @@ type ProcessManager interface {
 
 // Machine manages the state of a QEMU VM
 type Machine struct {
-	qmpClient      qmp.Client
-	processManager ProcessManager // nil = legacy mode
-	bootOverride   BootOverride
-	mu             sync.RWMutex
+	qmpClient               qmp.Client
+	processManager          ProcessManager // nil = legacy mode
+	bootOverride            BootOverride
+	gracefulShutdownTimeout time.Duration
+	mu                      sync.RWMutex
 }
 
 // New creates a new Machine with the given QMP client (legacy mode)
 func New(client qmp.Client) *Machine {
 	return &Machine{
-		qmpClient: client,
+		qmpClient:               client,
+		gracefulShutdownTimeout: defaultGracefulShutdownTimeout,
 		bootOverride: BootOverride{
 			Enabled: "Disabled",
 			Target:  "None",
@@ -91,14 +95,22 @@ func New(client qmp.Client) *Machine {
 // NewWithProcess creates a Machine in process management mode
 func NewWithProcess(client qmp.Client, pm ProcessManager) *Machine {
 	return &Machine{
-		qmpClient:      client,
-		processManager: pm,
+		qmpClient:               client,
+		processManager:          pm,
+		gracefulShutdownTimeout: defaultGracefulShutdownTimeout,
 		bootOverride: BootOverride{
 			Enabled: "Disabled",
 			Target:  "None",
 			Mode:    "UEFI",
 		},
 	}
+}
+
+// SetGracefulShutdownTimeout overrides how long GracefulShutdown/GracefulRestart
+// wait for the guest to exit on its own before falling back to a hard kill.
+// Must be called before Reset is used concurrently.
+func (m *Machine) SetGracefulShutdownTimeout(d time.Duration) {
+	m.gracefulShutdownTimeout = d
 }
 
 // GetPowerState returns the current power state of the VM
@@ -240,7 +252,7 @@ func (m *Machine) resetProcessMode(resetType string) error {
 		if err := m.qmpClient.SystemPowerdown(); err != nil {
 			return err
 		}
-		if err := m.processManager.WaitForExit(120 * time.Second); err != nil {
+		if err := m.processManager.WaitForExit(m.gracefulShutdownTimeout); err != nil {
 			log.Printf("Graceful shutdown timed out: %v", err)
 		}
 		return nil
@@ -249,7 +261,7 @@ func (m *Machine) resetProcessMode(resetType string) error {
 		if err := m.qmpClient.SystemPowerdown(); err != nil {
 			return err
 		}
-		if err := m.processManager.WaitForExit(120 * time.Second); err != nil {
+		if err := m.processManager.WaitForExit(m.gracefulShutdownTimeout); err != nil {
 			log.Printf("Graceful shutdown timed out, killing: %v", err)
 			m.processManager.Kill()
 			m.processManager.WaitForExit(5 * time.Second)

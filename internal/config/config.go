@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 // Config holds the application configuration
@@ -43,6 +44,11 @@ type Config struct {
 	CPUModel  string
 	CPUCount  int
 	MemoryMiB int
+	// GracefulShutdownTimeout bounds how long GracefulShutdown/GracefulRestart
+	// wait for the guest to exit on its own before falling back to a hard
+	// kill. Guests without a working ACPI power-button handler never react,
+	// so this is the worst-case latency of every graceful reset against them.
+	GracefulShutdownTimeout time.Duration
 }
 
 // Load reads configuration from environment variables with defaults
@@ -51,33 +57,34 @@ func Load() *Config {
 	systemManufacturer := getEnv("SYSTEM_MANUFACTURER", "QEMU")
 	systemSerial := getEnv("SYSTEM_SERIAL", "")
 	return &Config{
-		QMPSocket:             getEnv("QMP_SOCK", "/var/run/qemu/qmp.sock"),
-		IPMIUser:              getEnv("IPMI_USER", "admin"),
-		IPMIPass:              getEnv("IPMI_PASS", "password"),
-		RedfishPort:           getEnv("REDFISH_PORT", "443"),
-		IPMIPort:              getEnv("IPMI_PORT", "623"),
-		SerialAddr:            getEnv("SERIAL_ADDR", "localhost:9002"),
-		TLSCert:               getEnv("TLS_CERT", ""),
-		TLSKey:                getEnv("TLS_KEY", ""),
-		VMBootMode:            getEnv("VM_BOOT_MODE", "bios"),
-		VMIPMIAddr:            getEnv("VM_IPMI_ADDR", ""),
-		QEMUBinary:            getEnv("QEMU_BINARY", "qemu-system-x86_64"),
-		PowerOnAtStart:        getBoolEnv("POWER_ON_AT_START", false),
-		VNCAddr:               getEnv("VNC_ADDR", "localhost:5900"),
-		SystemUUID:            getEnv("SYSTEM_UUID", ""),
-		SystemManufacturer:    systemManufacturer,
-		SystemModel:           systemModel,
-		SystemSerial:          systemSerial,
-		ManagerModel:          getEnv("SYSTEM_MANAGER_MODEL", systemModel),
-		SystemFirmwareVersion: getEnv("SYSTEM_FIRMWARE_VERSION", "1.0.0"),
-		ManagerManufacturer:   getEnv("SYSTEM_MANAGER_MANUFACTURER", systemManufacturer),
-		ManagerSerial:         getEnv("SYSTEM_MANAGER_SERIAL", systemSerial),
-		ManagerPartNumber:     getEnv("SYSTEM_MANAGER_PART_NUMBER", ""),
-		SystemSKU:             getEnv("SYSTEM_SKU", ""),
-		SystemBiosVersion:     getEnv("SYSTEM_BIOS_VERSION", "1.0.0"),
-		CPUModel:              getEnv("SYSTEM_CPU_MODEL", "QEMU Virtual CPU"),
-		CPUCount:              getIntEnv("VM_CPUS", 2),
-		MemoryMiB:             getIntEnv("VM_MEMORY", 2048),
+		QMPSocket:               getEnv("QMP_SOCK", "/var/run/qemu/qmp.sock"),
+		IPMIUser:                getEnv("IPMI_USER", "admin"),
+		IPMIPass:                getEnv("IPMI_PASS", "password"),
+		RedfishPort:             getEnv("REDFISH_PORT", "443"),
+		IPMIPort:                getEnv("IPMI_PORT", "623"),
+		SerialAddr:              getEnv("SERIAL_ADDR", "localhost:9002"),
+		TLSCert:                 getEnv("TLS_CERT", ""),
+		TLSKey:                  getEnv("TLS_KEY", ""),
+		VMBootMode:              getEnv("VM_BOOT_MODE", "bios"),
+		VMIPMIAddr:              getEnv("VM_IPMI_ADDR", ""),
+		QEMUBinary:              getEnv("QEMU_BINARY", "qemu-system-x86_64"),
+		PowerOnAtStart:          getBoolEnv("POWER_ON_AT_START", false),
+		VNCAddr:                 getEnv("VNC_ADDR", "localhost:5900"),
+		SystemUUID:              getEnv("SYSTEM_UUID", ""),
+		SystemManufacturer:      systemManufacturer,
+		SystemModel:             systemModel,
+		SystemSerial:            systemSerial,
+		ManagerModel:            getEnv("SYSTEM_MANAGER_MODEL", systemModel),
+		SystemFirmwareVersion:   getEnv("SYSTEM_FIRMWARE_VERSION", "1.0.0"),
+		ManagerManufacturer:     getEnv("SYSTEM_MANAGER_MANUFACTURER", systemManufacturer),
+		ManagerSerial:           getEnv("SYSTEM_MANAGER_SERIAL", systemSerial),
+		ManagerPartNumber:       getEnv("SYSTEM_MANAGER_PART_NUMBER", ""),
+		SystemSKU:               getEnv("SYSTEM_SKU", ""),
+		SystemBiosVersion:       getEnv("SYSTEM_BIOS_VERSION", "1.0.0"),
+		CPUModel:                getEnv("SYSTEM_CPU_MODEL", "QEMU Virtual CPU"),
+		CPUCount:                getIntEnv("VM_CPUS", 2),
+		MemoryMiB:               getIntEnv("VM_MEMORY", 2048),
+		GracefulShutdownTimeout: getDurationEnv("GRACEFUL_SHUTDOWN_TIMEOUT", 120*time.Second),
 	}
 }
 
@@ -94,6 +101,18 @@ func getIntEnv(key string, defaultValue int) int {
 		return defaultValue
 	}
 	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return defaultValue
+	}
+	return parsed
+}
+
+func getDurationEnv(key string, defaultValue time.Duration) time.Duration {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	parsed, err := time.ParseDuration(value)
 	if err != nil {
 		return defaultValue
 	}

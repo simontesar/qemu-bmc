@@ -229,6 +229,7 @@ ipmitool user enable 3
 | `VM_IPMI_ADDR` | (empty, disabled) | VM IPMI chardev listen address (e.g., `:9002`) |
 | `VNC_ADDR` | `localhost:5900` | QEMU VNC TCP address for noVNC proxy |
 | `POWER_ON_AT_START` | `false` | Power on VM automatically at startup (useful for non-MAAS setups) |
+| `GRACEFUL_SHUTDOWN_TIMEOUT` | `120s` | How long GracefulShutdown/GracefulRestart wait for the guest to exit after an ACPI powerdown request before falling back to a hard kill (process management mode only) |
 
 ### Container Configuration
 
