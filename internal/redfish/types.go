@@ -16,6 +16,7 @@ type ServiceRoot struct {
 	Systems        ODataID `json:"Systems"`
 	Managers       ODataID `json:"Managers"`
 	Chassis        ODataID `json:"Chassis"`
+	Registries     ODataID `json:"Registries"`
 }
 
 // SystemCollection is a collection of computer systems
@@ -46,6 +47,7 @@ type ComputerSystem struct {
 	Boot          BootSource            `json:"Boot"`
 	MemorySummary MemorySummary         `json:"MemorySummary"`
 	Processors    ODataID               `json:"Processors"`
+	Bios          ODataID               `json:"Bios,omitempty"`
 	Actions       ComputerSystemActions `json:"Actions"`
 	Links         ComputerSystemLinks   `json:"Links"`
 }
@@ -235,4 +237,96 @@ type Processor struct {
 	MaxSpeedMHz           *int   `json:"MaxSpeedMHz,omitempty"`
 	TotalCores            *int   `json:"TotalCores,omitempty"`
 	TotalThreads          *int   `json:"TotalThreads,omitempty"`
+}
+
+// RegistryFileCollection is a collection of Redfish message/attribute registries.
+type RegistryFileCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// MessageRegistryFile locates the actual content of a registry (e.g. the BIOS
+// attribute registry) via Location[0].Uri.
+type MessageRegistryFile struct {
+	ODataType string             `json:"@odata.type"`
+	ODataID   string             `json:"@odata.id"`
+	ID        string             `json:"Id"`
+	Name      string             `json:"Name"`
+	Languages []string           `json:"Languages"`
+	Registry  string             `json:"Registry"`
+	Location  []RegistryLocation `json:"Location"`
+}
+
+// RegistryLocation is one language-specific location entry for a MessageRegistryFile.
+type RegistryLocation struct {
+	Language string `json:"Language"`
+	Uri      string `json:"Uri"`
+}
+
+// AttributeRegistry is the actual content of a BIOS/BMC attribute registry,
+// describing each attribute's type and whether changing it requires a reboot.
+type AttributeRegistry struct {
+	ODataType       string          `json:"@odata.type"`
+	ODataID         string          `json:"@odata.id"`
+	ODataContext    string          `json:"@odata.context,omitempty"`
+	ID              string          `json:"Id"`
+	Name            string          `json:"Name"`
+	Description     string          `json:"Description,omitempty"`
+	Language        string          `json:"Language,omitempty"`
+	OwningEntity    string          `json:"OwningEntity,omitempty"`
+	RegistryEntries RegistryEntries `json:"RegistryEntries"`
+}
+
+// RegistryEntries wraps the list of attribute definitions in an AttributeRegistry.
+type RegistryEntries struct {
+	Attributes []RegistryEntryAttribute `json:"Attributes"`
+}
+
+// RegistryEntryAttribute describes a single BIOS attribute: its type, whether
+// changing it requires a reboot, and (for enumerations) its allowed values.
+// ResetRequired is a plain bool (never omitted) because clients such as
+// metal-operator treat a missing/null ResetRequired as "true".
+type RegistryEntryAttribute struct {
+	AttributeName string           `json:"AttributeName"`
+	DisplayName   string           `json:"DisplayName,omitempty"`
+	Type          string           `json:"Type"`
+	ReadOnly      bool             `json:"ReadOnly"`
+	Immutable     bool             `json:"Immutable"`
+	Hidden        bool             `json:"Hidden"`
+	ResetRequired bool             `json:"ResetRequired"`
+	Value         []AttributeValue `json:"Value,omitempty"`
+}
+
+// AttributeValue is one allowed value for an Enumeration-typed attribute.
+type AttributeValue struct {
+	ValueName        string `json:"ValueName"`
+	ValueDisplayName string `json:"ValueDisplayName,omitempty"`
+}
+
+// Bios represents the live BIOS Settings resource (/Bios) or the pending
+// Settings resource (/Bios/Settings) — both share this shape, differing only
+// in Id/Attributes/whether @Redfish.Settings is populated.
+type Bios struct {
+	ODataType         string           `json:"@odata.type"`
+	ODataID           string           `json:"@odata.id"`
+	ID                string           `json:"Id"`
+	Name              string           `json:"Name"`
+	AttributeRegistry string           `json:"AttributeRegistry,omitempty"`
+	Attributes        map[string]any   `json:"Attributes"`
+	RedfishSettings   *RedfishSettings `json:"@Redfish.Settings,omitempty"`
+}
+
+// RedfishSettings is the @Redfish.Settings block linking a live resource
+// (e.g. /Bios) to its pending-settings object (e.g. /Bios/Settings).
+type RedfishSettings struct {
+	ODataType      string  `json:"@odata.type,omitempty"`
+	SettingsObject ODataID `json:"SettingsObject"`
+}
+
+// PatchBiosSettingsRequest is the request body for PATCHing /Bios/Settings.
+type PatchBiosSettingsRequest struct {
+	Attributes map[string]any `json:"Attributes"`
 }

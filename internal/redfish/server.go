@@ -1,6 +1,7 @@
 package redfish
 
 import (
+	"maps"
 	"net/http"
 	"sync"
 	"time"
@@ -59,10 +60,12 @@ type Server struct {
 	// mu guards the runtime-mutable fields below. Chainsaw's own test runs are
 	// serialized (--parallel 1), but the server itself may be polled/patched
 	// concurrently by other real clients (Ironic, metal-operator, a human curl).
-	mu            sync.RWMutex
-	currentMedia  string
-	indicatorLED  string
-	lastResetTime time.Time
+	mu               sync.RWMutex
+	currentMedia     string
+	indicatorLED     string
+	lastResetTime    time.Time
+	biosAttrs        map[string]any
+	biosPendingAttrs map[string]any
 }
 
 // SetInventory populates the static ComputerSystem/Manager/Processor inventory
@@ -108,6 +111,45 @@ func (s *Server) setLastResetTime(t time.Time) {
 	s.lastResetTime = t
 }
 
+func (s *Server) getBiosAttributes() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]any, len(s.biosAttrs))
+	maps.Copy(out, s.biosAttrs)
+	return out
+}
+
+func (s *Server) setBiosAttribute(name string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.biosAttrs[name] = value
+}
+
+func (s *Server) getBiosPendingAttributes() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]any, len(s.biosPendingAttrs))
+	maps.Copy(out, s.biosPendingAttrs)
+	return out
+}
+
+func (s *Server) mergeBiosPendingAttributes(attrs map[string]any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	maps.Copy(s.biosPendingAttrs, attrs)
+}
+
+// applyPendingBiosSettings copies any pending (reboot-required) BIOS
+// attribute changes into the live attribute set and clears the pending set.
+// Called after a reset that leaves the VM powered on, mirroring a real BMC
+// applying settings during POST.
+func (s *Server) applyPendingBiosSettings() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	maps.Copy(s.biosAttrs, s.biosPendingAttrs)
+	s.biosPendingAttrs = map[string]any{}
+}
+
 // NewServer creates a new Redfish server
 func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 	s := &Server{
@@ -117,6 +159,11 @@ func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 		pass:         pass,
 		novncHandler: novnc.NewHandler(vncAddr),
 		indicatorLED: "Off",
+		biosAttrs: map[string]any{
+			"AdminPhone": "",
+			"BootMode":   "Uefi",
+		},
+		biosPendingAttrs: map[string]any{},
 	}
 	s.setupRoutes()
 	return s
@@ -150,6 +197,22 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/", s.handleProcessorCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/{procid}", s.handleGetProcessor).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/{procid}/", s.handleGetProcessor).Methods("GET")
+
+	// Bios
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios", s.handleGetBios).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios/", s.handleGetBios).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios/Settings", s.handleGetBiosSettings).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios/Settings/", s.handleGetBiosSettings).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios/Settings", s.handlePatchBiosSettings).Methods("PATCH")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios/Settings/", s.handlePatchBiosSettings).Methods("PATCH")
+
+	// Registries
+	s.router.HandleFunc("/redfish/v1/Registries", s.handleRegistryCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Registries/", s.handleRegistryCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Registries/{id}.json", s.handleGetRegistryContent).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Registries/{id}.json/", s.handleGetRegistryContent).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Registries/{id}", s.handleGetRegistryFile).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Registries/{id}/", s.handleGetRegistryFile).Methods("GET")
 
 	// Managers
 	s.router.HandleFunc("/redfish/v1/Managers", s.handleManagerCollection).Methods("GET")
