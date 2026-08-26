@@ -55,6 +55,7 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 			TotalSystemMemoryGiB: float64(s.inventory.MemoryMiB) / 1024,
 		},
 		Processors: ODataID{ODataID: "/redfish/v1/Systems/1/Processors"},
+		Bios:       ODataID{ODataID: "/redfish/v1/Systems/1/Bios"},
 		Boot: BootSource{
 			BootSourceOverrideEnabled: boot.Enabled,
 			BootSourceOverrideTarget:  boot.Target,

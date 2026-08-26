@@ -15,6 +15,7 @@ func (s *Server) handleServiceRoot(w http.ResponseWriter, r *http.Request) {
 		Systems:        ODataID{ODataID: "/redfish/v1/Systems"},
 		Managers:       ODataID{ODataID: "/redfish/v1/Managers"},
 		Chassis:        ODataID{ODataID: "/redfish/v1/Chassis"},
+		Registries:     ODataID{ODataID: "/redfish/v1/Registries"},
 	}
 
 	w.Header().Set("Content-Type", "application/json")

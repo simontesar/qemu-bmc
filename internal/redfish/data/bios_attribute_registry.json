@@ -1,0 +1,36 @@
+{
+    "@odata.type": "#AttributeRegistry.v1_3_6.AttributeRegistry",
+    "@odata.id": "/redfish/v1/Registries/BiosAttributeRegistry.v1_0_0.json",
+    "@odata.context": "/redfish/v1/$metadata#AttributeRegistry.AttributeRegistry",
+    "Id": "BiosAttributeRegistry.v1_0_0",
+    "Name": "BIOS Attribute Registry",
+    "Description": "This registry defines the BIOS attributes exposed by qemu-bmc.",
+    "Language": "en",
+    "OwningEntity": "qemu-bmc",
+    "RegistryEntries": {
+        "Attributes": [
+            {
+                "AttributeName": "AdminPhone",
+                "DisplayName": "Admin Phone",
+                "Type": "String",
+                "ReadOnly": false,
+                "Immutable": false,
+                "Hidden": false,
+                "ResetRequired": false
+            },
+            {
+                "AttributeName": "BootMode",
+                "DisplayName": "Boot Mode",
+                "Type": "Enumeration",
+                "ReadOnly": false,
+                "Immutable": false,
+                "Hidden": false,
+                "ResetRequired": true,
+                "Value": [
+                    {"ValueName": "Bios", "ValueDisplayName": "BIOS"},
+                    {"ValueName": "Uefi", "ValueDisplayName": "UEFI"}
+                ]
+            }
+        ]
+    }
+}
