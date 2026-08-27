@@ -76,6 +76,7 @@ func ApplyDefaults(args []string) []string {
 type BuildOptions struct {
 	QMPSocketPath string
 	SerialAddr    string
+	SerialLogFile string
 }
 
 // BuildCommandLine validates user args, applies defaults, and injects
@@ -101,8 +102,12 @@ func BuildCommandLine(userArgs []string, opts BuildOptions) ([]string, error) {
 		if !found {
 			return nil, fmt.Errorf("invalid serial address %q: expected host:port", opts.SerialAddr)
 		}
+		chardev := fmt.Sprintf("socket,id=serial0,host=%s,port=%s,server=on,wait=off", host, port)
+		if opts.SerialLogFile != "" {
+			chardev += fmt.Sprintf(",logfile=%s,logappend=on", opts.SerialLogFile)
+		}
 		args = append(args,
-			"-chardev", fmt.Sprintf("socket,id=serial0,host=%s,port=%s,server=on,wait=off", host, port),
+			"-chardev", chardev,
 			"-serial", "chardev:serial0",
 		)
 	}

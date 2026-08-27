@@ -223,6 +223,7 @@ ipmitool user enable 3
 | `REDFISH_PORT` | `443` | Redfish HTTPS port |
 | `IPMI_PORT` | `623` | IPMI UDP port |
 | `SERIAL_ADDR` | `localhost:9002` | SOL bridge target |
+| `CONSOLE_LOG` | `/vm/console.log` | If set, passed to QEMU's serial chardev as `logfile=…,logappend=on` so QEMU writes all serial output to this file. Empty disables. |
 | `TLS_CERT` | (auto-generated) | TLS certificate path; if unset, a self-signed ECDSA cert is generated automatically |
 | `TLS_KEY` | (auto-generated) | TLS key path; if unset, generated together with `TLS_CERT` |
 | `VM_BOOT_MODE` | `bios` | Default boot mode (`bios` or `uefi`) |
@@ -520,6 +521,7 @@ ipmitool user enable 3
 | `REDFISH_PORT` | `443` | Redfish HTTPS ポート |
 | `IPMI_PORT` | `623` | IPMI UDP ポート |
 | `SERIAL_ADDR` | `localhost:9002` | SOL ブリッジ先 |
+| `CONSOLE_LOG` | `/vm/console.log` | 設定時、QEMU のシリアル chardev に `logfile=…,logappend=on` として渡され、QEMU が全シリアル出力をこのファイルに追記する（再起動をまたいで保持）。空で無効 |
 | `TLS_CERT` | (自動生成) | TLS 証明書パス。未設定時は ECDSA 自己署名証明書を動的生成 |
 | `TLS_KEY` | (自動生成) | TLS 鍵パス。未設定時は `TLS_CERT` と同時に生成 |
 | `VM_BOOT_MODE` | `bios` | デフォルトブートモード (`bios` または `uefi`) |

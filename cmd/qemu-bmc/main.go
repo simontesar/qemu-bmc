@@ -46,6 +46,7 @@ func main() {
 		cmdArgs, err := qemu.BuildCommandLine(qemuArgs, qemu.BuildOptions{
 			QMPSocketPath: cfg.QMPSocket,
 			SerialAddr:    cfg.SerialAddr,
+			SerialLogFile: cfg.SerialLogFile,
 		})
 		if err != nil {
 			log.Fatalf("Invalid QEMU arguments: %v", err)

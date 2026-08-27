@@ -174,6 +174,28 @@ func TestBuildCommandLine_InjectsSerial(t *testing.T) {
 	assert.Contains(t, result, "chardev:serial0")
 }
 
+func TestBuildCommandLine_SerialLogFile(t *testing.T) {
+	result, err := BuildCommandLine([]string{"-m", "4096"}, BuildOptions{
+		QMPSocketPath: "/tmp/qmp.sock",
+		SerialAddr:    "localhost:9002",
+		SerialLogFile: "/vm/console.log",
+	})
+	require.NoError(t, err)
+	assert.Contains(t, result,
+		"socket,id=serial0,host=localhost,port=9002,server=on,wait=off,logfile=/vm/console.log,logappend=on")
+}
+
+func TestBuildCommandLine_NoSerialLogFileWhenEmpty(t *testing.T) {
+	result, err := BuildCommandLine([]string{"-m", "4096"}, BuildOptions{
+		QMPSocketPath: "/tmp/qmp.sock",
+		SerialAddr:    "localhost:9002",
+	})
+	require.NoError(t, err)
+	for _, arg := range result {
+		assert.NotContains(t, arg, "logfile=")
+	}
+}
+
 func TestBuildCommandLine_UserArgsPreserved(t *testing.T) {
 	result, err := BuildCommandLine([]string{"-m", "4096", "-smp", "8"}, BuildOptions{
 		QMPSocketPath: "/tmp/qmp.sock",
