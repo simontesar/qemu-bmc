@@ -92,6 +92,7 @@ make container-test-all
 | `REDFISH_PORT` | `443` | Redfish HTTPS port |
 | `IPMI_PORT` | `623` | IPMI UDP port |
 | `SERIAL_ADDR` | `localhost:9002` | SOL bridge target |
+| `CONSOLE_LOG` | `/vm/console.log` | If set, QEMU serial chardev `logfile=…,logappend=on` — QEMU writes serial output to this file (append, survives restarts). Empty disables. |
 | `TLS_CERT` | (empty, falls back to HTTP) | TLS certificate path |
 | `TLS_KEY` | (empty) | TLS key path |
 | `VM_BOOT_MODE` | `bios` | Default boot mode |

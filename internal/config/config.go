@@ -14,6 +14,7 @@ type Config struct {
 	RedfishPort    string
 	IPMIPort       string
 	SerialAddr     string
+	SerialLogFile  string
 	TLSCert        string
 	TLSKey         string
 	VMBootMode     string
@@ -63,6 +64,7 @@ func Load() *Config {
 		RedfishPort:             getEnv("REDFISH_PORT", "443"),
 		IPMIPort:                getEnv("IPMI_PORT", "623"),
 		SerialAddr:              getEnv("SERIAL_ADDR", "localhost:9002"),
+		SerialLogFile:           getEnv("CONSOLE_LOG", "/vm/console.log"),
 		TLSCert:                 getEnv("TLS_CERT", ""),
 		TLSKey:                  getEnv("TLS_KEY", ""),
 		VMBootMode:              getEnv("VM_BOOT_MODE", "bios"),

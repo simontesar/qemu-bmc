@@ -9,7 +9,7 @@ import (
 
 func TestLoad_Defaults(t *testing.T) {
 	// Clear any env vars that might be set
-	for _, key := range []string{"QMP_SOCK", "IPMI_USER", "IPMI_PASS", "REDFISH_PORT", "IPMI_PORT", "SERIAL_ADDR", "TLS_CERT", "TLS_KEY", "VM_BOOT_MODE", "VM_IPMI_ADDR", "QEMU_BINARY", "POWER_ON_AT_START"} {
+	for _, key := range []string{"QMP_SOCK", "IPMI_USER", "IPMI_PASS", "REDFISH_PORT", "IPMI_PORT", "SERIAL_ADDR", "CONSOLE_LOG", "TLS_CERT", "TLS_KEY", "VM_BOOT_MODE", "VM_IPMI_ADDR", "QEMU_BINARY", "POWER_ON_AT_START"} {
 		os.Unsetenv(key)
 	}
 
@@ -20,6 +20,7 @@ func TestLoad_Defaults(t *testing.T) {
 	assert.Equal(t, "443", cfg.RedfishPort)
 	assert.Equal(t, "623", cfg.IPMIPort)
 	assert.Equal(t, "localhost:9002", cfg.SerialAddr)
+	assert.Equal(t, "/vm/console.log", cfg.SerialLogFile)
 	assert.Equal(t, "", cfg.TLSCert)
 	assert.Equal(t, "", cfg.TLSKey)
 	assert.Equal(t, "bios", cfg.VMBootMode)
