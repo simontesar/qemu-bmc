@@ -1,6 +1,7 @@
 package redfish
 
 import (
+	"log"
 	"maps"
 	"net/http"
 	"sync"
@@ -56,6 +57,7 @@ type Server struct {
 	pass         string
 	novncHandler *novnc.Handler
 	inventory    Inventory
+	debug        bool
 
 	// mu guards the runtime-mutable fields below. Chainsaw's own test runs are
 	// serialized (--parallel 1), but the server itself may be polled/patched
@@ -73,6 +75,19 @@ type Server struct {
 // non-empty ComputerSystem UUID for server discovery.
 func (s *Server) SetInventory(inv Inventory) {
 	s.inventory = inv
+}
+
+// SetDebug enables debug mode.
+func (s *Server) SetDebug(enabled bool) {
+	s.debug = enabled
+}
+
+// debugf logs a formatted line only when debug mode is enabled.
+func (s *Server) debugf(format string, args ...any) {
+	if !s.debug {
+		return
+	}
+	log.Printf(format, args...)
 }
 
 func (s *Server) getCurrentMedia() string {
@@ -143,11 +158,13 @@ func (s *Server) mergeBiosPendingAttributes(attrs map[string]any) {
 // attribute changes into the live attribute set and clears the pending set.
 // Called after a reset that leaves the VM powered on, mirroring a real BMC
 // applying settings during POST.
-func (s *Server) applyPendingBiosSettings() {
+func (s *Server) applyPendingBiosSettings() map[string]any {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	applied := maps.Clone(s.biosPendingAttrs)
 	maps.Copy(s.biosAttrs, s.biosPendingAttrs)
 	s.biosPendingAttrs = map[string]any{}
+	return applied
 }
 
 // NewServer creates a new Redfish server
