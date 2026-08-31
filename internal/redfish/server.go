@@ -51,13 +51,14 @@ type Inventory struct {
 
 // Server is the Redfish HTTP server
 type Server struct {
-	router       *mux.Router
-	machine      MachineInterface
-	user         string
-	pass         string
-	novncHandler *novnc.Handler
-	inventory    Inventory
-	debug        bool
+	router            *mux.Router
+	machine           MachineInterface
+	user              string
+	pass              string
+	novncHandler      *novnc.Handler
+	inventory         Inventory
+	debug             bool
+	dellBMCAttributes bool
 
 	// mu guards the runtime-mutable fields below. Chainsaw's own test runs are
 	// serialized (--parallel 1), but the server itself may be polled/patched
@@ -81,6 +82,13 @@ func (s *Server) SetInventory(inv Inventory) {
 // SetDebug enables debug mode.
 func (s *Server) SetDebug(enabled bool) {
 	s.debug = enabled
+}
+
+// SetDellBMCAttributes toggles the Dell iDRAC-style Manager attribute surface.
+// When disabled (default), the Manager has no Links block, /Managers/1/Attributes*
+// return 404, and ManagerAttributeRegistry is absent from /redfish/v1/Registries.
+func (s *Server) SetDellBMCAttributes(enabled bool) {
+	s.dellBMCAttributes = enabled
 }
 
 // debugf logs a formatted line only when debug mode is enabled.
@@ -261,8 +269,7 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/", s.handleGetManager).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Actions/Manager.Reset", s.handleManagerReset).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Actions/Manager.Reset/", s.handleManagerReset).Methods("POST")
-	// Manager (BMC) attributes — Dell iDRAC-style, consumed by metal-operator's
-	// DellRedfishBMC client for BMCSettings.
+
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes", s.handleGetManagerAttributes).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/", s.handleGetManagerAttributes).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/Settings", s.handleGetManagerAttributesSettings).Methods("GET")

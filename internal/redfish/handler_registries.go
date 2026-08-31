@@ -22,27 +22,34 @@ type registryFile struct {
 	content  []byte
 }
 
-// registries is the set of attribute registries qemu-bmc serves under
-// /redfish/v1/Registries. Both are consumed by metal-operator: the BIOS one by
-// the generic Redfish client, the Manager one by the Dell iDRAC client
-// (DellRedfishBMC) when applying BMCSettings.
-var registries = []registryFile{
-	{
-		id:       biosAttributeRegistryID,
-		name:     "BIOS Attribute Registry File",
-		registry: "BiosAttributeRegistry1.0",
-		content:  biosAttributeRegistryJSON,
-	},
-	{
-		id:       managerAttributeRegistryID,
-		name:     "Manager Attribute Registry File",
-		registry: "ManagerAttributeRegistry1.0",
-		content:  managerAttributeRegistryJSON,
-	},
+// biosRegistryFile is always served under /redfish/v1/Registries. The generic
+// Redfish client in metal-operator reads it for BIOSSettings.
+var biosRegistryFile = registryFile{
+	id:       biosAttributeRegistryID,
+	name:     "BIOS Attribute Registry File",
+	registry: "BiosAttributeRegistry1.0",
+	content:  biosAttributeRegistryJSON,
 }
 
-func lookupRegistry(id string) (registryFile, bool) {
-	for _, reg := range registries {
+// managerRegistryFile is the Dell iDRAC-style Manager attribute registry. It is
+// served only when ENABLE_DELL_BMC_ATTRIBUTES is set (s.dellBMCAttributes).
+var managerRegistryFile = registryFile{
+	id:       managerAttributeRegistryID,
+	name:     "Manager Attribute Registry File",
+	registry: "ManagerAttributeRegistry1.0",
+	content:  managerAttributeRegistryJSON,
+}
+
+// servedRegistries returns the registries this server currently exposes.
+func (s *Server) servedRegistries() []registryFile {
+	if s.dellBMCAttributes {
+		return []registryFile{biosRegistryFile, managerRegistryFile}
+	}
+	return []registryFile{biosRegistryFile}
+}
+
+func (s *Server) lookupRegistry(id string) (registryFile, bool) {
+	for _, reg := range s.servedRegistries() {
 		if reg.id == id {
 			return reg, true
 		}
@@ -51,8 +58,9 @@ func lookupRegistry(id string) (registryFile, bool) {
 }
 
 func (s *Server) handleRegistryCollection(w http.ResponseWriter, r *http.Request) {
-	members := make([]ODataID, 0, len(registries))
-	for _, reg := range registries {
+	served := s.servedRegistries()
+	members := make([]ODataID, 0, len(served))
+	for _, reg := range served {
 		members = append(members, ODataID{ODataID: "/redfish/v1/Registries/" + reg.id})
 	}
 	col := RegistryFileCollection{
@@ -68,7 +76,7 @@ func (s *Server) handleRegistryCollection(w http.ResponseWriter, r *http.Request
 
 func (s *Server) handleGetRegistryFile(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	reg, ok := lookupRegistry(id)
+	reg, ok := s.lookupRegistry(id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "ResourceNotFound", "registry not found")
 		return
@@ -91,7 +99,7 @@ func (s *Server) handleGetRegistryFile(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleGetRegistryContent(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	reg, ok := lookupRegistry(id)
+	reg, ok := s.lookupRegistry(id)
 	if !ok {
 		writeError(w, http.StatusNotFound, "ResourceNotFound", "registry not found")
 		return

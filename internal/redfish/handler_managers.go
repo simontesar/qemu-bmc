@@ -52,19 +52,31 @@ func (s *Server) handleGetManager(w http.ResponseWriter, r *http.Request) {
 				AllowableValues: []string{"GracefulRestart"},
 			},
 		},
+	}
+	if s.dellBMCAttributes {
 		// Dell iDRAC-style OEM link that metal-operator's DellRedfishBMC follows
 		// to find the writable BMC attribute object for BMCSettings.
-		Links: &ManagerLinks{
+		mgr.Links = &ManagerLinks{
 			Oem: ManagerLinksOem{
 				Dell: ManagerLinksOemDell{
 					DellAttributes:      []ODataID{{ODataID: managerAttributesPath("1")}},
 					DellAttributesCount: 1,
 				},
 			},
-		},
+		}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(mgr)
+}
+
+// dellAttrsEnabled writes a 404 and returns false when the Dell BMC attribute
+// surface is disabled, so the attribute handlers can guard with one line.
+func (s *Server) dellAttrsEnabled(w http.ResponseWriter) bool {
+	if !s.dellBMCAttributes {
+		writeError(w, http.StatusNotFound, "ResourceNotFound", "Dell BMC attributes are not enabled")
+		return false
+	}
+	return true
 }
 
 func managerAttributesPath(managerID string) string {
@@ -79,6 +91,9 @@ func managerAttributesSettingsObjectPath(managerID string) string {
 // metal-operator's Dell client (GetBMCAttributeValues) reads Attributes for
 // current values and follows @Redfish.Settings.SettingsObject to apply changes.
 func (s *Server) handleGetManagerAttributes(w http.ResponseWriter, r *http.Request) {
+	if !s.dellAttrsEnabled(w) {
+		return
+	}
 	id := mux.Vars(r)["id"]
 	attrs := DellManagerAttributes{
 		ODataType:         "#DellAttributes.v1_0_0.DellAttributes",
@@ -101,6 +116,9 @@ func (s *Server) handleGetManagerAttributes(w http.ResponseWriter, r *http.Reque
 // attributes. qemu-bmc always applies immediately, so the pending set is always
 // empty; metal-operator checks this is empty before issuing a new apply.
 func (s *Server) handleGetManagerAttributesSettings(w http.ResponseWriter, r *http.Request) {
+	if !s.dellAttrsEnabled(w) {
+		return
+	}
 	id := mux.Vars(r)["id"]
 	attrs := DellManagerAttributes{
 		ODataType:  "#DellAttributes.v1_0_0.DellAttributes",
@@ -119,6 +137,9 @@ func (s *Server) handleGetManagerAttributesSettings(w http.ResponseWriter, r *ht
 // @Redfish.SettingsApplyTime. The If-Match header and @Redfish.SettingsApplyTime
 // body block sent by Dell clients are accepted and ignored.
 func (s *Server) handlePatchManagerAttributesSettings(w http.ResponseWriter, r *http.Request) {
+	if !s.dellAttrsEnabled(w) {
+		return
+	}
 	id := mux.Vars(r)["id"]
 	var req PatchManagerAttributesRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
