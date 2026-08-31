@@ -140,11 +140,56 @@ type Manager struct {
 	Status          ResourceStatus `json:"Status,omitempty"`
 	VirtualMedia    ODataID        `json:"VirtualMedia"`
 	Actions         ManagerActions `json:"Actions"`
+	Links           *ManagerLinks  `json:"Links,omitempty"`
 }
 
 // ManagerActions contains available actions for a Manager.
 type ManagerActions struct {
 	Reset ResetAction `json:"#Manager.Reset"`
+}
+
+// ManagerLinks / ManagerLinksOem / ManagerLinksOemDell surface the Dell iDRAC
+// OEM link that metal-operator's DellRedfishBMC follows from Manager.Links.Oem.Dell
+// to locate the writable BMC attribute objects (see getCurrentBMCSettingAttribute
+// in metal-operator's bmc/redfish_dell.go).
+type ManagerLinks struct {
+	Oem ManagerLinksOem `json:"Oem"`
+}
+
+// ManagerLinksOem wraps vendor-specific manager links.
+type ManagerLinksOem struct {
+	Dell ManagerLinksOemDell `json:"Dell"`
+}
+
+// ManagerLinksOemDell lists the DellAttributes objects that hold writable BMC
+// attributes. qemu-bmc exposes a single one at /redfish/v1/Managers/1/Attributes.
+type ManagerLinksOemDell struct {
+	DellAttributes      []ODataID `json:"DellAttributes"`
+	DellAttributesCount int       `json:"DellAttributes@odata.count"`
+}
+
+// DellManagerAttributes represents the live BMC ("Manager") attribute resource
+// (/Managers/1/Attributes) or its pending-settings object
+// (/Managers/1/Attributes/Settings). Both share this shape, differing only in
+// Id/Attributes and whether @Redfish.Settings is populated — mirroring the Bios
+// type. metal-operator's Dell client reads Attributes for current values and
+// PATCHes the @Redfish.Settings.SettingsObject to change them.
+type DellManagerAttributes struct {
+	ODataType         string           `json:"@odata.type"`
+	ODataID           string           `json:"@odata.id"`
+	ID                string           `json:"Id"`
+	Name              string           `json:"Name"`
+	AttributeRegistry string           `json:"AttributeRegistry,omitempty"`
+	Attributes        map[string]any   `json:"Attributes"`
+	RedfishSettings   *RedfishSettings `json:"@Redfish.Settings,omitempty"`
+}
+
+// PatchManagerAttributesRequest is the request body for PATCHing
+// /Managers/1/Attributes/Settings. The optional @Redfish.SettingsApplyTime block
+// that Dell clients send is accepted and ignored (qemu-bmc always applies
+// immediately).
+type PatchManagerAttributesRequest struct {
+	Attributes map[string]any `json:"Attributes"`
 }
 
 // ResourceStatus is the standard Redfish Status object (State/Health). Clients

@@ -28,50 +28,6 @@ func init() {
 	}
 }
 
-func (s *Server) handleRegistryCollection(w http.ResponseWriter, r *http.Request) {
-	col := RegistryFileCollection{
-		ODataType:    "#MessageRegistryFileCollection.MessageRegistryFileCollection",
-		ODataID:      "/redfish/v1/Registries",
-		Name:         "Registry File Collection",
-		MembersCount: 1,
-		Members:      []ODataID{{ODataID: "/redfish/v1/Registries/" + biosAttributeRegistryID}},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(col)
-}
-
-func (s *Server) handleGetRegistryFile(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	if id != biosAttributeRegistryID {
-		writeError(w, http.StatusNotFound, "ResourceNotFound", "registry not found")
-		return
-	}
-
-	file := MessageRegistryFile{
-		ODataType: "#MessageRegistryFile.v1_1_4.MessageRegistryFile",
-		ODataID:   "/redfish/v1/Registries/" + id,
-		ID:        id,
-		Name:      "BIOS Attribute Registry File",
-		Languages: []string{"en"},
-		Registry:  "BiosAttributeRegistry1.0",
-		Location: []RegistryLocation{
-			{Language: "en", Uri: "/redfish/v1/Registries/" + id + ".json"},
-		},
-	}
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(file)
-}
-
-func (s *Server) handleGetRegistryContent(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	if id != biosAttributeRegistryID {
-		writeError(w, http.StatusNotFound, "ResourceNotFound", "registry not found")
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Write(biosAttributeRegistryJSON)
-}
-
 func biosSettingsObjectPath(systemID string) string {
 	return "/redfish/v1/Systems/" + systemID + "/Bios/Settings"
 }

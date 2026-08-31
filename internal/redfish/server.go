@@ -68,6 +68,7 @@ type Server struct {
 	lastResetTime    time.Time
 	biosAttrs        map[string]any
 	biosPendingAttrs map[string]any
+	managerAttrs     map[string]any
 }
 
 // SetInventory populates the static ComputerSystem/Manager/Processor inventory
@@ -154,6 +155,20 @@ func (s *Server) mergeBiosPendingAttributes(attrs map[string]any) {
 	maps.Copy(s.biosPendingAttrs, attrs)
 }
 
+func (s *Server) getManagerAttributes() map[string]any {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make(map[string]any, len(s.managerAttrs))
+	maps.Copy(out, s.managerAttrs)
+	return out
+}
+
+func (s *Server) setManagerAttribute(name string, value any) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.managerAttrs[name] = value
+}
+
 // applyPendingBiosSettings copies any pending (reboot-required) BIOS
 // attribute changes into the live attribute set and clears the pending set.
 // Called after a reset that leaves the VM powered on, mirroring a real BMC
@@ -181,6 +196,14 @@ func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 			"BootMode":   "Uefi",
 		},
 		biosPendingAttrs: map[string]any{},
+		// BMC ("Manager") attributes surfaced to metal-operator's Dell iDRAC
+		// client for BMCSettings. Names/defaults mirror common iDRAC attributes
+		// and match data/manager_attribute_registry.json.
+		managerAttrs: map[string]any{
+			"EmailAlert.1.Address":   "",
+			"SysLog.1.SysLogServer1": "",
+			"NTPConfigGroup.1.NTP1":  "",
+		},
 	}
 	s.setupRoutes()
 	return s
@@ -238,6 +261,14 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/", s.handleGetManager).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Actions/Manager.Reset", s.handleManagerReset).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/Actions/Manager.Reset/", s.handleManagerReset).Methods("POST")
+	// Manager (BMC) attributes — Dell iDRAC-style, consumed by metal-operator's
+	// DellRedfishBMC client for BMCSettings.
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes", s.handleGetManagerAttributes).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/", s.handleGetManagerAttributes).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/Settings", s.handleGetManagerAttributesSettings).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/Settings/", s.handleGetManagerAttributesSettings).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/Settings", s.handlePatchManagerAttributesSettings).Methods("PATCH")
+	s.router.HandleFunc("/redfish/v1/Managers/{id}/Attributes/Settings/", s.handlePatchManagerAttributesSettings).Methods("PATCH")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia", s.handleVirtualMediaCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/", s.handleVirtualMediaCollection).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/{vmid}", s.handleGetVirtualMedia).Methods("GET")

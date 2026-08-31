@@ -1,0 +1,47 @@
+{
+    "@odata.type": "#AttributeRegistry.v1_3_6.AttributeRegistry",
+    "@odata.id": "/redfish/v1/Registries/ManagerAttributeRegistry.v1_0_0.json",
+    "@odata.context": "/redfish/v1/$metadata#AttributeRegistry.AttributeRegistry",
+    "Id": "ManagerAttributeRegistry.v1_0_0",
+    "Name": "Manager Attribute Registry",
+    "Description": "This registry defines the BMC (Manager) attributes exposed by qemu-bmc, modelled on the Dell iDRAC ManagerAttributeRegistry.",
+    "Language": "en",
+    "OwningEntity": "qemu-bmc",
+    "RegistryEntries": {
+        "Attributes": [
+            {
+                "AttributeName": "EmailAlert.1.Address",
+                "DisplayName": "Email Alert Destination Address",
+                "Type": "String",
+                "ReadOnly": false,
+                "Readonly": false,
+                "Immutable": false,
+                "Hidden": false,
+                "ResetRequired": false,
+                "CurrentValue": null
+            },
+            {
+                "AttributeName": "SysLog.1.SysLogServer1",
+                "DisplayName": "Remote Syslog Server 1",
+                "Type": "String",
+                "ReadOnly": false,
+                "Readonly": false,
+                "Immutable": false,
+                "Hidden": false,
+                "ResetRequired": false,
+                "CurrentValue": null
+            },
+            {
+                "AttributeName": "NTPConfigGroup.1.NTP1",
+                "DisplayName": "NTP Server 1",
+                "Type": "String",
+                "ReadOnly": false,
+                "Readonly": false,
+                "Immutable": false,
+                "Hidden": false,
+                "ResetRequired": false,
+                "CurrentValue": null
+            }
+        ]
+    }
+}

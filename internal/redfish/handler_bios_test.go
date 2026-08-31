@@ -27,8 +27,41 @@ func TestGetRegistryCollection(t *testing.T) {
 
 	var col RegistryFileCollection
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &col))
-	require.Len(t, col.Members, 1)
-	assert.Equal(t, "/redfish/v1/Registries/"+biosAttributeRegistryID, col.Members[0].ODataID)
+	require.Len(t, col.Members, 2)
+	ids := make([]string, 0, len(col.Members))
+	for _, m := range col.Members {
+		ids = append(ids, m.ODataID)
+	}
+	assert.Contains(t, ids, "/redfish/v1/Registries/"+biosAttributeRegistryID)
+	assert.Contains(t, ids, "/redfish/v1/Registries/"+managerAttributeRegistryID)
+	assert.Equal(t, len(col.Members), col.MembersCount)
+}
+
+func TestGetRegistryContent_ManagerAttributeRegistry(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Registries/"+managerAttributeRegistryID+".json", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var reg AttributeRegistry
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &reg))
+	require.Equal(t, managerAttributeRegistryID, reg.ID)
+
+	byName := make(map[string]RegistryEntryAttribute, len(reg.RegistryEntries.Attributes))
+	for _, attr := range reg.RegistryEntries.Attributes {
+		byName[attr.AttributeName] = attr
+	}
+	emailAlert, ok := byName["EmailAlert.1.Address"]
+	require.True(t, ok)
+	assert.Equal(t, "String", emailAlert.Type)
+	assert.False(t, emailAlert.ResetRequired)
+	assert.False(t, emailAlert.ReadOnly)
+	assert.False(t, emailAlert.Immutable)
+	assert.False(t, emailAlert.Hidden)
 }
 
 func TestGetRegistryFile(t *testing.T) {
