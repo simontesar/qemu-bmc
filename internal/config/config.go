@@ -8,21 +8,22 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	QMPSocket      string
-	IPMIUser       string
-	IPMIPass       string
-	RedfishPort    string
-	IPMIPort       string
-	SerialAddr     string
-	SerialLogFile  string
-	TLSCert        string
-	TLSKey         string
-	VMBootMode     string
-	VMIPMIAddr     string // VM IPMI chardev listen address
-	QEMUBinary     string // QEMU binary path for process management mode
-	PowerOnAtStart bool   // Power on VM at container start
-	VNCAddr        string // VNC TCP address for noVNC proxy
-	Debug          bool
+	QMPSocket         string
+	IPMIUser          string
+	IPMIPass          string
+	RedfishPort       string
+	IPMIPort          string
+	SerialAddr        string
+	SerialLogFile     string
+	TLSCert           string
+	TLSKey            string
+	VMBootMode        string
+	VMIPMIAddr        string // VM IPMI chardev listen address
+	QEMUBinary        string // QEMU binary path for process management mode
+	PowerOnAtStart    bool   // Power on VM at container start
+	VNCAddr           string // VNC TCP address for noVNC proxy
+	Debug             bool
+	DellBMCAttributes bool
 	// Redfish ComputerSystem inventory — required by clients like metal-operator
 	// that key server discovery on ComputerSystem.UUID.
 	SystemUUID         string
@@ -74,6 +75,7 @@ func Load() *Config {
 		PowerOnAtStart:          getBoolEnv("POWER_ON_AT_START", false),
 		VNCAddr:                 getEnv("VNC_ADDR", "localhost:5900"),
 		Debug:                   getBoolEnv("DEBUG", false),
+		DellBMCAttributes:       getBoolEnv("ENABLE_DELL_BMC_ATTRIBUTES", false),
 		SystemUUID:              getEnv("SYSTEM_UUID", ""),
 		SystemManufacturer:      systemManufacturer,
 		SystemModel:             systemModel,

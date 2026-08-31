@@ -84,6 +84,139 @@ func TestGetManager_Inventory(t *testing.T) {
 	assert.Contains(t, mgr.Actions.Reset.AllowableValues, "GracefulRestart")
 }
 
+func TestGetManager_ExposesDellAttributesLink(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+	srv.SetDellBMCAttributes(true)
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Managers/1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var mgr Manager
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &mgr))
+	require.NotNil(t, mgr.Links)
+	require.Len(t, mgr.Links.Oem.Dell.DellAttributes, 1)
+	assert.Equal(t, "/redfish/v1/Managers/1/Attributes", mgr.Links.Oem.Dell.DellAttributes[0].ODataID)
+	assert.Equal(t, 1, mgr.Links.Oem.Dell.DellAttributesCount)
+}
+
+func TestGetManagerAttributes(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+	srv.SetDellBMCAttributes(true)
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Managers/1/Attributes", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotEmpty(t, w.Header().Get("ETag"))
+	var attrs DellManagerAttributes
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &attrs))
+	assert.Equal(t, "Attributes", attrs.ID)
+	assert.Equal(t, managerAttributeRegistryID, attrs.AttributeRegistry)
+	if _, ok := attrs.Attributes["EmailAlert.1.Address"]; !ok {
+		t.Fatalf("expected EmailAlert.1.Address in manager attributes, got %v", attrs.Attributes)
+	}
+	require.NotNil(t, attrs.RedfishSettings)
+	assert.Equal(t, "/redfish/v1/Managers/1/Attributes/Settings", attrs.RedfishSettings.SettingsObject.ODataID)
+}
+
+func TestGetManagerAttributesSettings_AlwaysEmpty(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+	srv.SetDellBMCAttributes(true)
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Managers/1/Attributes/Settings", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var attrs DellManagerAttributes
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &attrs))
+	assert.Equal(t, "Settings", attrs.ID)
+	assert.Empty(t, attrs.Attributes)
+}
+
+func TestPatchManagerAttributesSettings_AppliesImmediately(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+	srv.SetDellBMCAttributes(true)
+
+	body := `{"Attributes": {"EmailAlert.1.Address": "alerts@example.com"}, "@Redfish.SettingsApplyTime": {"ApplyTime": "Immediate"}}`
+	req := httptest.NewRequest("PATCH", "/redfish/v1/Managers/1/Attributes/Settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("If-Match", `"manager-attributes-settings"`)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusNoContent, w.Code)
+
+	getReq := httptest.NewRequest("GET", "/redfish/v1/Managers/1/Attributes", nil)
+	w2 := httptest.NewRecorder()
+	srv.ServeHTTP(w2, getReq)
+	var attrs DellManagerAttributes
+	require.NoError(t, json.Unmarshal(w2.Body.Bytes(), &attrs))
+	assert.Equal(t, "alerts@example.com", attrs.Attributes["EmailAlert.1.Address"])
+
+	// Pending set stays empty (immediate apply).
+	getSettings := httptest.NewRequest("GET", "/redfish/v1/Managers/1/Attributes/Settings", nil)
+	w3 := httptest.NewRecorder()
+	srv.ServeHTTP(w3, getSettings)
+	var pending DellManagerAttributes
+	require.NoError(t, json.Unmarshal(w3.Body.Bytes(), &pending))
+	assert.Empty(t, pending.Attributes)
+}
+
+func TestPatchManagerAttributesSettings_NoAttributes(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "", "", "")
+	srv.SetDellBMCAttributes(true)
+
+	req := httptest.NewRequest("PATCH", "/redfish/v1/Managers/1/Attributes/Settings", strings.NewReader(`{"Attributes": {}}`))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+// TestManagerAttributes_DisabledByDefault verifies the Dell iDRAC-style attribute
+// surface is absent unless SetDellBMCAttributes(true) is called.
+func TestManagerAttributes_DisabledByDefault(t *testing.T) {
+	srv := NewServer(newMockMachine(qmp.StatusRunning), "", "", "")
+
+	t.Run("Manager has no Links block", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/redfish/v1/Managers/1", nil)
+		w := httptest.NewRecorder()
+		srv.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+		var mgr Manager
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &mgr))
+		assert.Nil(t, mgr.Links)
+		assert.NotContains(t, w.Body.String(), `"Links"`)
+	})
+
+	for _, tc := range []struct {
+		method, path string
+		body         string
+	}{
+		{"GET", "/redfish/v1/Managers/1/Attributes", ""},
+		{"GET", "/redfish/v1/Managers/1/Attributes/Settings", ""},
+		{"PATCH", "/redfish/v1/Managers/1/Attributes/Settings", `{"Attributes":{"EmailAlert.1.Address":"x@y.z"}}`},
+	} {
+		t.Run(tc.method+" "+tc.path+" is 404", func(t *testing.T) {
+			req := httptest.NewRequest(tc.method, tc.path, strings.NewReader(tc.body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+			assert.Equal(t, http.StatusNotFound, w.Code)
+		})
+	}
+}
+
 func TestHandleManagerReset(t *testing.T) {
 	mock := newMockMachine(qmp.StatusRunning)
 	srv := NewServer(mock, "", "", "")
