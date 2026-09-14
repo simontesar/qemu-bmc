@@ -24,6 +24,7 @@ var testInventory = Inventory{
 	ManagerManufacturer:    "QEMU",
 	ManagerSerial:          "serial-1",
 	ManagerPartNumber:      "part-1",
+	ManagerUUID:            "manager-uuid-1",
 	CPUModel:               "QEMU Virtual CPU",
 	CPUCount:               4,
 	MemoryMiB:              2048,
@@ -79,6 +80,7 @@ func TestGetManager_Inventory(t *testing.T) {
 	assert.Equal(t, "QEMU", mgr.Manufacturer)
 	assert.Equal(t, "serial-1", mgr.SerialNumber)
 	assert.Equal(t, "part-1", mgr.PartNumber)
+	assert.Equal(t, "manager-uuid-1", mgr.UUID)
 	assert.Empty(t, mgr.LastResetTime)
 	assert.Equal(t, "/redfish/v1/Managers/1/Actions/Manager.Reset", mgr.Actions.Reset.Target)
 	assert.Contains(t, mgr.Actions.Reset.AllowableValues, "GracefulRestart")
@@ -351,4 +353,36 @@ func TestVirtualMedia_InsertThenGet(t *testing.T) {
 	json.Unmarshal(w2.Body.Bytes(), &vm)
 	assert.True(t, vm.Inserted)
 	assert.Equal(t, "http://example.com/boot.iso", vm.Image)
+}
+
+// TestGetManager_OmitsUUIDWhenUnset keeps the field optional: a lab that does
+// not set SYSTEM_MANAGER_UUID reports no UUID at all rather than an empty one.
+func TestGetManager_OmitsUUIDWhenUnset(t *testing.T) {
+	srv := NewServer(newMockMachine(qmp.StatusRunning), "", "", "")
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Managers/1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.NotContains(t, w.Body.String(), `"UUID"`)
+}
+
+// TestGetManager_AdvertisesGraphicalConsole covers what metal-operator's
+// DiscoverManager looks for when picking a manager: it only considers managers
+// with a non-zero MaxConcurrentSessions or a non-empty ConnectTypesSupported.
+func TestGetManager_AdvertisesGraphicalConsole(t *testing.T) {
+	srv := NewServer(newMockMachine(qmp.StatusRunning), "", "", "")
+
+	req := httptest.NewRequest("GET", "/redfish/v1/Managers/1", nil)
+	w := httptest.NewRecorder()
+	srv.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	var mgr Manager
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &mgr))
+	require.NotNil(t, mgr.GraphicalConsole)
+	assert.True(t, mgr.GraphicalConsole.ServiceEnabled)
+	assert.Equal(t, 1, mgr.GraphicalConsole.MaxConcurrentSessions)
+	assert.Equal(t, []string{"KVMIP"}, mgr.GraphicalConsole.ConnectTypesSupported)
 }

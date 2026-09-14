@@ -42,6 +42,7 @@ type Inventory struct {
 	ManagerManufacturer    string
 	ManagerSerial          string
 	ManagerPartNumber      string
+	ManagerUUID            string
 	// Processor inventory surfaced at /redfish/v1/Systems/1/Processors/1.
 	CPUModel string
 	CPUCount int
