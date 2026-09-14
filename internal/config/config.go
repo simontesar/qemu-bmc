@@ -37,6 +37,7 @@ type Config struct {
 	ManagerManufacturer   string
 	ManagerSerial         string
 	ManagerPartNumber     string
+	ManagerUUID           string
 	// Additional ComputerSystem inventory read by metal-operator's GetSystemInfo.
 	SystemSKU         string
 	SystemBiosVersion string
@@ -85,6 +86,7 @@ func Load() *Config {
 		ManagerManufacturer:     getEnv("SYSTEM_MANAGER_MANUFACTURER", systemManufacturer),
 		ManagerSerial:           getEnv("SYSTEM_MANAGER_SERIAL", systemSerial),
 		ManagerPartNumber:       getEnv("SYSTEM_MANAGER_PART_NUMBER", ""),
+		ManagerUUID:             getEnv("SYSTEM_MANAGER_UUID", ""),
 		SystemSKU:               getEnv("SYSTEM_SKU", ""),
 		SystemBiosVersion:       getEnv("SYSTEM_BIOS_VERSION", "1.0.0"),
 		CPUModel:                getEnv("SYSTEM_CPU_MODEL", "QEMU Virtual CPU"),

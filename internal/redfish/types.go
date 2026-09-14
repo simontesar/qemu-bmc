@@ -138,6 +138,7 @@ type Manager struct {
 	ID              string         `json:"Id"`
 	Name            string         `json:"Name"`
 	ManagerType     string         `json:"ManagerType"`
+	UUID            string         `json:"UUID,omitempty"`
 	Manufacturer    string         `json:"Manufacturer,omitempty"`
 	Model           string         `json:"Model,omitempty"`
 	SerialNumber    string         `json:"SerialNumber,omitempty"`
@@ -149,6 +150,14 @@ type Manager struct {
 	VirtualMedia    ODataID        `json:"VirtualMedia"`
 	Actions         ManagerActions `json:"Actions"`
 	Links           *ManagerLinks  `json:"Links,omitempty"`
+
+	GraphicalConsole *GraphicalConsole `json:"GraphicalConsole,omitempty"`
+}
+
+type GraphicalConsole struct {
+	ServiceEnabled        bool     `json:"ServiceEnabled"`
+	MaxConcurrentSessions int      `json:"MaxConcurrentSessions"`
+	ConnectTypesSupported []string `json:"ConnectTypesSupported"`
 }
 
 // ManagerActions contains available actions for a Manager.

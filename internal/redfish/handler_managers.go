@@ -34,6 +34,7 @@ func (s *Server) handleGetManager(w http.ResponseWriter, r *http.Request) {
 		ID:              "1",
 		Name:            "QEMU BMC",
 		ManagerType:     "BMC",
+		UUID:            s.inventory.ManagerUUID,
 		Manufacturer:    s.inventory.ManagerManufacturer,
 		Model:           s.inventory.ManagerModel,
 		SerialNumber:    s.inventory.ManagerSerial,
@@ -51,6 +52,11 @@ func (s *Server) handleGetManager(w http.ResponseWriter, r *http.Request) {
 				Target:          "/redfish/v1/Managers/1/Actions/Manager.Reset",
 				AllowableValues: []string{"GracefulRestart"},
 			},
+		},
+		GraphicalConsole: &GraphicalConsole{
+			ServiceEnabled:        true,
+			MaxConcurrentSessions: 1,
+			ConnectTypesSupported: []string{"KVMIP"},
 		},
 	}
 	if s.dellBMCAttributes {

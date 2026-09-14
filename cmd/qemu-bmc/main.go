@@ -119,6 +119,7 @@ func main() {
 		ManagerManufacturer:    cfg.ManagerManufacturer,
 		ManagerSerial:          cfg.ManagerSerial,
 		ManagerPartNumber:      cfg.ManagerPartNumber,
+		ManagerUUID:            cfg.ManagerUUID,
 		CPUModel:               cfg.CPUModel,
 		CPUCount:               cfg.CPUCount,
 		MemoryMiB:              cfg.MemoryMiB,
