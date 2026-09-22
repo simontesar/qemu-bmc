@@ -48,6 +48,7 @@ type ComputerSystem struct {
 	MemorySummary MemorySummary         `json:"MemorySummary"`
 	Processors    ODataID               `json:"Processors"`
 	Bios          ODataID               `json:"Bios,omitempty"`
+	BootOptions   ODataID               `json:"BootOptions,omitempty"`
 	Actions       ComputerSystemActions `json:"Actions"`
 	Links         ComputerSystemLinks   `json:"Links"`
 }
@@ -80,6 +81,30 @@ type BootSource struct {
 // ComputerSystemActions contains available actions
 type ComputerSystemActions struct {
 	Reset ResetAction `json:"#ComputerSystem.Reset"`
+}
+
+// BootOptionCollection lists the devices this system knows how to boot from —
+// the valid Boot.BootOrder entries. A real BMC derives this from discovered
+// hardware; qemu-bmc has a fixed catalog matching the targets it can actually
+// pass through to QEMU (see bootOptionCatalog in handler_bootoptions.go).
+type BootOptionCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// BootOption represents a single boot-able device. Its BootOptionReference
+// (== Id here) is what a client puts into Boot.BootOrder to select it.
+type BootOption struct {
+	ODataType           string `json:"@odata.type"`
+	ODataID             string `json:"@odata.id"`
+	ID                  string `json:"Id"`
+	Name                string `json:"Name"`
+	DisplayName         string `json:"DisplayName"`
+	BootOptionReference string `json:"BootOptionReference"`
+	BootOptionEnabled   bool   `json:"BootOptionEnabled"`
 }
 
 // ResetAction describes the reset action

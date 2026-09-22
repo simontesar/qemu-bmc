@@ -263,6 +263,12 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/{procid}", s.handleGetProcessor).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Processors/{procid}/", s.handleGetProcessor).Methods("GET")
 
+	// BootOptions
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/BootOptions", s.handleBootOptionCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/BootOptions/", s.handleBootOptionCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/BootOptions/{bootoptid}", s.handleGetBootOption).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/Systems/{id}/BootOptions/{bootoptid}/", s.handleGetBootOption).Methods("GET")
+
 	// Bios
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios", s.handleGetBios).Methods("GET")
 	s.router.HandleFunc("/redfish/v1/Systems/{id}/Bios/", s.handleGetBios).Methods("GET")
