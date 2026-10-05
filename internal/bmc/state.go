@@ -2,11 +2,37 @@ package bmc
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"sync"
 )
 
 const maxUsers = 15
+
+// Account errors returned by the account management methods.
+var (
+	ErrUserExists = errors.New("user name already exists")
+	ErrNoFreeSlot = errors.New("no free user slot")
+	ErrNotFound   = errors.New("user not found")
+	ErrEmptyName  = errors.New("user name must not be empty")
+)
+
+// Account is a snapshot of a populated user slot, as surfaced by the Redfish
+// AccountService. ID is the slot number.
+type Account struct {
+	ID        uint8
+	Name      string
+	Privilege uint8
+	Enabled   bool
+}
+
+// AccountUpdate holds the account fields to change. Nil fields are left as-is.
+type AccountUpdate struct {
+	Name      *string
+	Password  *string
+	Privilege *uint8
+	Enabled   *bool
+}
 
 // UserAccess holds access settings for a single user slot.
 type UserAccess struct {
@@ -201,12 +227,142 @@ func (s *State) LookupUserByName(name string) (uint8, bool) {
 	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.lookupUserByNameLocked(name)
+}
+
+// lookupUserByNameLocked finds a user by name. Caller must hold s.mu.
+func (s *State) lookupUserByNameLocked(name string) (uint8, bool) {
 	for i := 1; i <= maxUsers; i++ {
 		if s.users[i].name == name {
 			return uint8(i), true
 		}
 	}
 	return 0, false
+}
+
+func (s *State) accountLocked(id uint8) Account {
+	u := s.users[id]
+	return Account{ID: id, Name: u.name, Privilege: u.access.PrivilegeLimit, Enabled: u.access.Enabled}
+}
+
+// Accounts returns the populated (named) user slots in slot order.
+func (s *State) Accounts() []Account {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	var out []Account
+	for i := 1; i <= maxUsers; i++ {
+		if s.users[i].name != "" {
+			out = append(out, s.accountLocked(uint8(i)))
+		}
+	}
+	return out
+}
+
+// Account returns the account in the given slot. Returns false for invalid
+// IDs or unnamed (free) slots.
+func (s *State) Account(id uint8) (Account, bool) {
+	if validateUserID(id) != nil {
+		return Account{}, false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.users[id].name == "" {
+		return Account{}, false
+	}
+	return s.accountLocked(id), true
+}
+
+// CreateAccount stores a new account in the first free slot (2-15; slot 1 is
+// the reserved null user) and returns its slot number.
+func (s *State) CreateAccount(name, password string, privilege uint8, enabled bool) (uint8, error) {
+	if name == "" {
+		return 0, ErrEmptyName
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if _, ok := s.lookupUserByNameLocked(name); ok {
+		return 0, ErrUserExists
+	}
+	for i := 2; i <= maxUsers; i++ {
+		if s.users[i].name == "" {
+			s.users[i] = userSlot{
+				name:     name,
+				password: password,
+				access: UserAccess{
+					PrivilegeLimit: privilege,
+					Enabled:        enabled,
+					IPMIMessaging:  true,
+					LinkAuth:       true,
+				},
+			}
+			return uint8(i), nil
+		}
+	}
+	return 0, ErrNoFreeSlot
+}
+
+// UpdateAccount applies the non-nil fields of u to the account in the given slot.
+func (s *State) UpdateAccount(id uint8, u AccountUpdate) error {
+	if validateUserID(id) != nil {
+		return ErrNotFound
+	}
+	if u.Name != nil && *u.Name == "" {
+		return ErrEmptyName
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	slot := &s.users[id]
+	if slot.name == "" {
+		return ErrNotFound
+	}
+	if u.Name != nil && *u.Name != slot.name {
+		if _, ok := s.lookupUserByNameLocked(*u.Name); ok {
+			return ErrUserExists
+		}
+		slot.name = *u.Name
+	}
+	if u.Password != nil {
+		slot.password = *u.Password
+	}
+	if u.Privilege != nil {
+		slot.access.PrivilegeLimit = *u.Privilege
+	}
+	if u.Enabled != nil {
+		slot.access.Enabled = *u.Enabled
+	}
+	return nil
+}
+
+// DeleteAccount clears the account in the given slot.
+func (s *State) DeleteAccount(id uint8) error {
+	if validateUserID(id) != nil {
+		return ErrNotFound
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.users[id].name == "" {
+		return ErrNotFound
+	}
+	s.users[id] = userSlot{}
+	return nil
+}
+
+// Authenticate reports whether name/password match an enabled account.
+func (s *State) Authenticate(name, password string) bool {
+	if name == "" {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.lookupUserByNameLocked(name)
+	if !ok || !s.users[id].access.Enabled {
+		return false
+	}
+	stored := s.users[id].password
+	if stored == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(stored), []byte(password)) == 1
 }
 
 // GetLANConfig returns a copy of the LAN configuration parameter value.

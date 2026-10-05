@@ -105,6 +105,7 @@ func main() {
 
 	// Start Redfish server
 	redfishServer := redfish.NewServer(m, cfg.IPMIUser, cfg.IPMIPass, cfg.VNCAddr)
+	redfishServer.SetUserStore(bmcState)
 	redfishServer.SetDebug(cfg.Debug)
 	redfishServer.SetDellBMCAttributes(cfg.DellBMCAttributes)
 	redfishServer.SetInventory(redfish.Inventory{

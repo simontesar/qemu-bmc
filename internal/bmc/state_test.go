@@ -1,6 +1,7 @@
 package bmc
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -329,4 +330,106 @@ func TestGetChannelInfo(t *testing.T) {
 	info5 := s.GetChannelInfo(5)
 	assert.Equal(t, uint8(5), info5.ChannelNumber)
 	assert.Equal(t, uint8(0x04), info5.ChannelMedium)
+}
+
+func TestCreateAccount_UsesFirstFreeSlotAfterReserved(t *testing.T) {
+	s := NewState("admin", "password")
+
+	id, err := s.CreateAccount("mtfuser", "secret", 2, true)
+	require.NoError(t, err)
+	assert.Equal(t, uint8(3), id, "slot 1 is reserved and slot 2 holds admin")
+
+	a, ok := s.Account(id)
+	require.True(t, ok)
+	assert.Equal(t, Account{ID: 3, Name: "mtfuser", Privilege: 2, Enabled: true}, a)
+	access, err := s.GetUserAccess(1, id)
+	require.NoError(t, err)
+	assert.True(t, access.IPMIMessaging)
+	assert.True(t, access.LinkAuth)
+
+	name1, err := s.GetUserName(1)
+	require.NoError(t, err)
+	assert.Equal(t, "", name1, "slot 1 must never be allocated")
+}
+
+func TestCreateAccount_Errors(t *testing.T) {
+	s := NewState("admin", "password")
+
+	_, err := s.CreateAccount("admin", "x", 4, true)
+	assert.ErrorIs(t, err, ErrUserExists)
+
+	_, err = s.CreateAccount("", "x", 4, true)
+	assert.ErrorIs(t, err, ErrEmptyName)
+
+	for i := 3; i <= maxUsers; i++ {
+		_, err := s.CreateAccount(fmt.Sprintf("user%d", i), "x", 2, true)
+		require.NoError(t, err)
+	}
+	_, err = s.CreateAccount("onetoomany", "x", 2, true)
+	assert.ErrorIs(t, err, ErrNoFreeSlot)
+}
+
+func TestAccounts_ListsPopulatedSlotsOnly(t *testing.T) {
+	s := NewState("admin", "password")
+	_, err := s.CreateAccount("mtfuser", "secret", 3, false)
+	require.NoError(t, err)
+
+	accounts := s.Accounts()
+	require.Len(t, accounts, 2)
+	assert.Equal(t, "admin", accounts[0].Name)
+	assert.Equal(t, uint8(2), accounts[0].ID)
+	assert.Equal(t, Account{ID: 3, Name: "mtfuser", Privilege: 3, Enabled: false}, accounts[1])
+}
+
+func TestUpdateAccount(t *testing.T) {
+	s := NewState("admin", "password")
+	id, err := s.CreateAccount("mtfuser", "old", 2, true)
+	require.NoError(t, err)
+
+	newPass := "new"
+	require.NoError(t, s.UpdateAccount(id, AccountUpdate{Password: &newPass}))
+	assert.True(t, s.Authenticate("mtfuser", "new"))
+	assert.False(t, s.Authenticate("mtfuser", "old"))
+
+	priv, disabled := uint8(4), false
+	require.NoError(t, s.UpdateAccount(id, AccountUpdate{Privilege: &priv, Enabled: &disabled}))
+	a, ok := s.Account(id)
+	require.True(t, ok)
+	assert.Equal(t, uint8(4), a.Privilege)
+	assert.False(t, a.Enabled)
+
+	dup := "admin"
+	assert.ErrorIs(t, s.UpdateAccount(id, AccountUpdate{Name: &dup}), ErrUserExists)
+	empty := ""
+	assert.ErrorIs(t, s.UpdateAccount(id, AccountUpdate{Name: &empty}), ErrEmptyName)
+	assert.ErrorIs(t, s.UpdateAccount(9, AccountUpdate{Password: &newPass}), ErrNotFound)
+	assert.ErrorIs(t, s.UpdateAccount(0, AccountUpdate{Password: &newPass}), ErrNotFound)
+}
+
+func TestDeleteAccount_FreesSlot(t *testing.T) {
+	s := NewState("admin", "password")
+	id, err := s.CreateAccount("mtfuser", "secret", 2, true)
+	require.NoError(t, err)
+
+	require.NoError(t, s.DeleteAccount(id))
+	_, ok := s.Account(id)
+	assert.False(t, ok)
+	assert.False(t, s.Authenticate("mtfuser", "secret"))
+	assert.ErrorIs(t, s.DeleteAccount(id), ErrNotFound)
+
+	reused, err := s.CreateAccount("other", "x", 2, true)
+	require.NoError(t, err)
+	assert.Equal(t, id, reused)
+}
+
+func TestAuthenticate(t *testing.T) {
+	s := NewState("admin", "password")
+	assert.True(t, s.Authenticate("admin", "password"))
+	assert.False(t, s.Authenticate("admin", "wrong"))
+	assert.False(t, s.Authenticate("nobody", "password"))
+	assert.False(t, s.Authenticate("", ""))
+
+	_, err := s.CreateAccount("disabled", "secret", 2, false)
+	require.NoError(t, err)
+	assert.False(t, s.Authenticate("disabled", "secret"), "disabled accounts must not authenticate")
 }
