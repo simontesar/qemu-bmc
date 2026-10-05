@@ -1,7 +1,6 @@
 package redfish
 
 import (
-	"crypto/subtle"
 	"net/http"
 	"strings"
 )
@@ -23,9 +22,10 @@ func (s *Server) basicAuthMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// Credentials are checked against the shared BMC user table, so accounts
+		// created via the AccountService (or in-band IPMI) can authenticate.
 		user, pass, ok := r.BasicAuth()
-		if !ok || subtle.ConstantTimeCompare([]byte(user), []byte(s.user)) != 1 ||
-			subtle.ConstantTimeCompare([]byte(pass), []byte(s.pass)) != 1 {
+		if !ok || !s.users.Authenticate(user, pass) {
 			w.Header().Set("WWW-Authenticate", `Basic realm="Redfish"`)
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return

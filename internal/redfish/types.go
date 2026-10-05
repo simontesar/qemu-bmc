@@ -17,6 +17,7 @@ type ServiceRoot struct {
 	Managers       ODataID `json:"Managers"`
 	Chassis        ODataID `json:"Chassis"`
 	Registries     ODataID `json:"Registries"`
+	AccountService ODataID `json:"AccountService"`
 }
 
 // SystemCollection is a collection of computer systems
@@ -416,4 +417,56 @@ type RedfishSettings struct {
 // PatchBiosSettingsRequest is the request body for PATCHing /Bios/Settings.
 type PatchBiosSettingsRequest struct {
 	Attributes map[string]any `json:"Attributes"`
+}
+
+// AccountService is the Redfish account service
+type AccountService struct {
+	ODataType         string  `json:"@odata.type"`
+	ODataID           string  `json:"@odata.id"`
+	ID                string  `json:"Id"`
+	Name              string  `json:"Name"`
+	ServiceEnabled    bool    `json:"ServiceEnabled"`
+	MinPasswordLength int     `json:"MinPasswordLength"`
+	MaxPasswordLength int     `json:"MaxPasswordLength"`
+	Accounts          ODataID `json:"Accounts"`
+}
+
+// ManagerAccountCollection is a collection of manager accounts
+type ManagerAccountCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// ManagerAccount is a BMC user account. Password is always null on read.
+type ManagerAccount struct {
+	ODataType    string   `json:"@odata.type"`
+	ODataID      string   `json:"@odata.id"`
+	ID           string   `json:"Id"`
+	Name         string   `json:"Name"`
+	UserName     string   `json:"UserName"`
+	RoleID       string   `json:"RoleId"`
+	Enabled      bool     `json:"Enabled"`
+	Locked       bool     `json:"Locked"`
+	Password     *string  `json:"Password"`
+	AccountTypes []string `json:"AccountTypes"`
+}
+
+// CreateAccountRequest is the POST body for /AccountService/Accounts
+type CreateAccountRequest struct {
+	UserName string `json:"UserName"`
+	Password string `json:"Password"`
+	RoleID   string `json:"RoleId"`
+	Enabled  *bool  `json:"Enabled,omitempty"`
+}
+
+// PatchAccountRequest is the PATCH body for /AccountService/Accounts/{id}.
+// Only the fields present in the request are applied.
+type PatchAccountRequest struct {
+	UserName *string `json:"UserName,omitempty"`
+	Password *string `json:"Password,omitempty"`
+	RoleID   *string `json:"RoleId,omitempty"`
+	Enabled  *bool   `json:"Enabled,omitempty"`
 }

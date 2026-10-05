@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/tjst-t/qemu-bmc/internal/bmc"
 	"github.com/tjst-t/qemu-bmc/internal/machine"
 	"github.com/tjst-t/qemu-bmc/internal/novnc"
 	"github.com/tjst-t/qemu-bmc/internal/qmp"
@@ -60,6 +61,9 @@ type Server struct {
 	inventory         Inventory
 	debug             bool
 	dellBMCAttributes bool
+	// users is the BMC user table backing basic auth and the AccountService.
+	// It's set once via SetUserStore before the server starts handling requests.
+	users *bmc.State
 
 	// mu guards the runtime-mutable fields below. Chainsaw's own test runs are
 	// serialized (--parallel 1), but the server itself may be polled/patched
@@ -79,6 +83,12 @@ type Server struct {
 // non-empty ComputerSystem UUID for server discovery.
 func (s *Server) SetInventory(inv Inventory) {
 	s.inventory = inv
+}
+
+// SetUserStore shares the BMC user table (also used by IPMI) with the Redfish
+// server, so basic auth and the AccountService operate on the same accounts.
+func (s *Server) SetUserStore(users *bmc.State) {
+	s.users = users
 }
 
 // SetDebug enables debug mode.
@@ -214,6 +224,7 @@ func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 		user:         user,
 		pass:         pass,
 		novncHandler: novnc.NewHandler(vncAddr),
+		users:        bmc.NewState(user, pass),
 		indicatorLED: "Off",
 		biosAttrs: map[string]any{
 			"AdminPhone": "",
@@ -307,6 +318,20 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/{vmid}/Actions/VirtualMedia.InsertMedia/", s.handleInsertMedia).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/{vmid}/Actions/VirtualMedia.EjectMedia", s.handleEjectMedia).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/Managers/{id}/VirtualMedia/{vmid}/Actions/VirtualMedia.EjectMedia/", s.handleEjectMedia).Methods("POST")
+
+	// AccountService
+	s.router.HandleFunc("/redfish/v1/AccountService", s.handleGetAccountService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/AccountService/", s.handleGetAccountService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts", s.handleAccountCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/", s.handleAccountCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts", s.handleCreateAccount).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/", s.handleCreateAccount).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}", s.handleGetAccount).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}/", s.handleGetAccount).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}", s.handlePatchAccount).Methods("PATCH")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}/", s.handlePatchAccount).Methods("PATCH")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}", s.handleDeleteAccount).Methods("DELETE")
+	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}/", s.handleDeleteAccount).Methods("DELETE")
 
 	// Chassis
 	s.router.HandleFunc("/redfish/v1/Chassis", s.handleChassisCollection).Methods("GET")

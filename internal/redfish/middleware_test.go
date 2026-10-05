@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/tjst-t/qemu-bmc/internal/bmc"
 	"github.com/tjst-t/qemu-bmc/internal/qmp"
 )
 
@@ -49,6 +51,36 @@ func TestBasicAuth(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, w.Code)
 	})
+}
+
+func TestBasicAuth_SharedUserStore(t *testing.T) {
+	mock := newMockMachine(qmp.StatusRunning)
+	srv := NewServer(mock, "admin", "password", "")
+	users := bmc.NewState("admin", "password")
+	srv.SetUserStore(users)
+	_, err := users.CreateAccount("operator", "secret", 3, true)
+	require.NoError(t, err)
+	_, err = users.CreateAccount("disabled", "secret", 2, false)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name, user, pass string
+		code             int
+	}{
+		{"store account authenticates", "operator", "secret", http.StatusOK},
+		{"store account wrong password", "operator", "wrong", http.StatusUnauthorized},
+		{"disabled account rejected", "disabled", "secret", http.StatusUnauthorized},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/redfish/v1/Systems/1", nil)
+			req.SetBasicAuth(tt.user, tt.pass)
+			w := httptest.NewRecorder()
+			srv.ServeHTTP(w, req)
+
+			assert.Equal(t, tt.code, w.Code)
+		})
+	}
 }
 
 func TestTrailingSlash(t *testing.T) {

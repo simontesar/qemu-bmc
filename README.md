@@ -197,9 +197,17 @@ ipmitool user enable 3
 | POST | `.../VirtualMedia.EjectMedia` | Eject media |
 | GET | `/redfish/v1/Chassis` | Chassis collection |
 | GET | `/redfish/v1/Chassis/1` | Chassis resource |
+| GET | `/redfish/v1/AccountService` | Account service (`MaxPasswordLength` 20) |
+| GET | `/redfish/v1/AccountService/Accounts` | Account collection |
+| POST | `/redfish/v1/AccountService/Accounts` | Create account (`UserName`, `Password`, `RoleId`, `Enabled`) |
+| GET | `/redfish/v1/AccountService/Accounts/{id}` | Account resource |
+| PATCH | `/redfish/v1/AccountService/Accounts/{id}` | Update `UserName`, `Password`, `RoleId`, `Enabled` |
+| DELETE | `/redfish/v1/AccountService/Accounts/{id}` | Delete account |
 | GET | `/novnc/` | Redirect to noVNC UI |
 | GET | `/novnc/vnc.html` | Browser-based VNC console |
 | GET | `/websockify` | WebSocket-to-VNC proxy |
+
+Redfish accounts share the 15-slot IPMI user table: an account's `Id` is its IPMI user ID, Redfish basic auth checks the same table, and accounts created via Redfish, out-of-band IPMI or in-band IPMI are visible to all three. `RoleId` maps to the IPMI privilege level (`Administrator`=4, `Operator`=3, `ReadOnly`=2). User names are limited to 16 bytes and passwords to 20 bytes.
 
 ## IPMI Commands
 
