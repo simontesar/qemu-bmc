@@ -9,6 +9,7 @@ import (
 
 	"github.com/gorilla/mux"
 	"github.com/tjst-t/qemu-bmc/internal/bmc"
+	"github.com/tjst-t/qemu-bmc/internal/events"
 	"github.com/tjst-t/qemu-bmc/internal/machine"
 	"github.com/tjst-t/qemu-bmc/internal/novnc"
 	"github.com/tjst-t/qemu-bmc/internal/qmp"
@@ -68,14 +69,19 @@ type Server struct {
 	// mu guards the runtime-mutable fields below. Chainsaw's own test runs are
 	// serialized (--parallel 1), but the server itself may be polled/patched
 	// concurrently by other real clients (Ironic, metal-operator, a human curl).
-	mu               sync.RWMutex
-	currentMedia     string
-	indicatorLED     string
-	lastResetTime    time.Time
-	biosAttrs        map[string]any
-	biosPendingAttrs map[string]any
-	managerAttrs     map[string]any
-	bootOrder        []string
+	mu                 sync.RWMutex
+	currentMedia       string
+	indicatorLED       string
+	lastResetTime      time.Time
+	biosAttrs          map[string]any
+	biosPendingAttrs   map[string]any
+	managerAttrs       map[string]any
+	bootOrder          []string
+	subscriptions      map[string]EventDestination
+	nextSubscriptionID int
+	nextEventID        int
+
+	eventDispatcher *events.Dispatcher
 }
 
 // SetInventory populates the static ComputerSystem/Manager/Processor inventory
@@ -239,8 +245,10 @@ func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 			"SysLog.1.SysLogServer1": "",
 			"NTPConfigGroup.1.NTP1":  "",
 		},
-		bootOrder: []string{"Pxe", "Hdd", "Cd"},
+		bootOrder:     []string{"Pxe", "Hdd", "Cd"},
+		subscriptions: map[string]EventDestination{},
 	}
+	s.eventDispatcher = events.NewDispatcher(deliveryRetryAttempts, deliveryRetryIntervalSeconds*time.Second, s.debugf)
 	s.setupRoutes()
 	return s
 }
@@ -332,6 +340,20 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}/", s.handlePatchAccount).Methods("PATCH")
 	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}", s.handleDeleteAccount).Methods("DELETE")
 	s.router.HandleFunc("/redfish/v1/AccountService/Accounts/{id}/", s.handleDeleteAccount).Methods("DELETE")
+
+	// EventService
+	s.router.HandleFunc("/redfish/v1/EventService", s.handleGetEventService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/EventService/", s.handleGetEventService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions", s.handleSubscriptionCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/", s.handleSubscriptionCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions", s.handleCreateSubscription).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/", s.handleCreateSubscription).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/{id}", s.handleGetSubscription).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/{id}/", s.handleGetSubscription).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/{id}", s.handleDeleteSubscription).Methods("DELETE")
+	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/{id}/", s.handleDeleteSubscription).Methods("DELETE")
+	s.router.HandleFunc("/redfish/v1/EventService/Actions/EventService.SubmitTestEvent", s.handleSubmitTestEvent).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/EventService/Actions/EventService.SubmitTestEvent/", s.handleSubmitTestEvent).Methods("POST")
 
 	// Chassis
 	s.router.HandleFunc("/redfish/v1/Chassis", s.handleChassisCollection).Methods("GET")

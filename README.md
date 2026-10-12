@@ -203,11 +203,19 @@ ipmitool user enable 3
 | GET | `/redfish/v1/AccountService/Accounts/{id}` | Account resource |
 | PATCH | `/redfish/v1/AccountService/Accounts/{id}` | Update `UserName`, `Password`, `RoleId`, `Enabled` |
 | DELETE | `/redfish/v1/AccountService/Accounts/{id}` | Delete account |
+| GET | `/redfish/v1/EventService` | Event service (`Event` and `MetricReport` formats) |
+| GET | `/redfish/v1/EventService/Subscriptions` | Event subscription collection |
+| POST | `/redfish/v1/EventService/Subscriptions` | Create subscription (`Destination`, `EventFormatType`, `Protocol`, `Context`, `DeliveryRetryPolicy`) |
+| GET | `/redfish/v1/EventService/Subscriptions/{id}` | Event subscription resource |
+| DELETE | `/redfish/v1/EventService/Subscriptions/{id}` | Delete subscription |
+| POST | `/redfish/v1/EventService/Actions/EventService.SubmitTestEvent` | Push a test event to all `Event` subscriptions |
 | GET | `/novnc/` | Redirect to noVNC UI |
 | GET | `/novnc/vnc.html` | Browser-based VNC console |
 | GET | `/websockify` | WebSocket-to-VNC proxy |
 
 Redfish accounts share the 15-slot IPMI user table: an account's `Id` is its IPMI user ID, Redfish basic auth checks the same table, and accounts created via Redfish, out-of-band IPMI or in-band IPMI are visible to all three. `RoleId` maps to the IPMI privilege level (`Administrator`=4, `Operator`=3, `ReadOnly`=2). User names are limited to 16 bytes and passwords to 20 bytes.
+
+Event subscriptions live in memory and are lost when qemu-bmc restarts, like on a BMC reboot. Creating a second subscription with the same `Destination` and `EventFormatType` fails with `ResourceAlreadyExists`. `SubmitTestEvent` POSTs an `#Event.v1_7_0.Event` payload, carrying the subscription's `Context`, to every `Event`-format subscription; failed deliveries are retried 3 times at 5-second intervals, and https destinations are not certificate-verified. `MetricReport` subscriptions are accepted but no metric reports are pushed.
 
 ## IPMI Commands
 
