@@ -1,5 +1,7 @@
 package redfish
 
+import "encoding/json"
+
 // ODataID represents an OData reference
 type ODataID struct {
 	ODataID string `json:"@odata.id"`
@@ -18,6 +20,7 @@ type ServiceRoot struct {
 	Chassis        ODataID `json:"Chassis"`
 	Registries     ODataID `json:"Registries"`
 	AccountService ODataID `json:"AccountService"`
+	EventService   ODataID `json:"EventService"`
 }
 
 // SystemCollection is a collection of computer systems
@@ -469,4 +472,80 @@ type PatchAccountRequest struct {
 	Password *string `json:"Password,omitempty"`
 	RoleID   *string `json:"RoleId,omitempty"`
 	Enabled  *bool   `json:"Enabled,omitempty"`
+}
+
+// EventService is the Redfish event service
+type EventService struct {
+	ODataType                    string              `json:"@odata.type"`
+	ODataID                      string              `json:"@odata.id"`
+	ID                           string              `json:"Id"`
+	Name                         string              `json:"Name"`
+	ServiceEnabled               bool                `json:"ServiceEnabled"`
+	DeliveryRetryAttempts        int                 `json:"DeliveryRetryAttempts"`
+	DeliveryRetryIntervalSeconds int                 `json:"DeliveryRetryIntervalSeconds"`
+	EventFormatTypes             []string            `json:"EventFormatTypes"`
+	Subscriptions                ODataID             `json:"Subscriptions"`
+	Actions                      EventServiceActions `json:"Actions"`
+}
+
+// EventServiceActions contains available event service actions
+type EventServiceActions struct {
+	SubmitTestEvent ActionTarget `json:"#EventService.SubmitTestEvent"`
+}
+
+// ActionTarget describes an action without parameter allowable values
+type ActionTarget struct {
+	Target string `json:"target"`
+}
+
+// EventDestinationCollection is a collection of event subscriptions
+type EventDestinationCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// EventDestination is an event subscription
+type EventDestination struct {
+	ODataType           string   `json:"@odata.type"`
+	ODataID             string   `json:"@odata.id"`
+	ID                  string   `json:"Id"`
+	Name                string   `json:"Name"`
+	Destination         string   `json:"Destination"`
+	Context             string   `json:"Context"`
+	Protocol            string   `json:"Protocol"`
+	SubscriptionType    string   `json:"SubscriptionType"`
+	EventFormatType     string   `json:"EventFormatType"`
+	DeliveryRetryPolicy string   `json:"DeliveryRetryPolicy,omitempty"`
+	EventTypes          []string `json:"EventTypes,omitempty"`
+	RegistryPrefixes    []string `json:"RegistryPrefixes,omitempty"`
+	ResourceTypes       []string `json:"ResourceTypes,omitempty"`
+}
+
+// CreateEventDestinationRequest is the POST body for /EventService/Subscriptions
+type CreateEventDestinationRequest struct {
+	Destination         string   `json:"Destination"`
+	Context             string   `json:"Context"`
+	Protocol            string   `json:"Protocol"`
+	SubscriptionType    string   `json:"SubscriptionType"`
+	EventFormatType     string   `json:"EventFormatType"`
+	DeliveryRetryPolicy string   `json:"DeliveryRetryPolicy"`
+	EventTypes          []string `json:"EventTypes"`
+	RegistryPrefixes    []string `json:"RegistryPrefixes"`
+	ResourceTypes       []string `json:"ResourceTypes"`
+}
+
+// SubmitTestEventRequest is the POST body for #EventService.SubmitTestEvent.
+// OriginOfCondition is accepted as a plain URI string or an @odata.id link.
+type SubmitTestEventRequest struct {
+	EventID           string          `json:"EventId"`
+	EventTimestamp    string          `json:"EventTimestamp"`
+	Severity          string          `json:"Severity"`
+	MessageSeverity   string          `json:"MessageSeverity"`
+	Message           string          `json:"Message"`
+	MessageID         string          `json:"MessageId"`
+	MessageArgs       []string        `json:"MessageArgs"`
+	OriginOfCondition json.RawMessage `json:"OriginOfCondition"`
 }

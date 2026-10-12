@@ -18,6 +18,7 @@ internal/
   redfish/                     # HTTP server with gorilla/mux, 15+ endpoints
   ipmi/                        # UDP server + VM chardev server, RMCP/RMCP+, RAKP auth, chassis commands
   bmc/                         # BMC configuration state (users, LAN, channels)
+  events/                      # Redfish event delivery to subscription destinations
   config/                      # Environment variable config
 docker/
   Dockerfile                   # Multi-stage build (Go builder + Debian runtime)

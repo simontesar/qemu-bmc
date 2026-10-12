@@ -312,7 +312,7 @@ func TestChannelAccess_SetGet(t *testing.T) {
 	assert.Equal(t, ChannelAccess{}, outOfRange)
 
 	// Out-of-range set is silently ignored
-	s.SetChannelAccess(16, access) // should not panic
+	s.SetChannelAccess(16, access)  // should not panic
 	s.SetChannelAccess(255, access) // should not panic
 }
 
@@ -335,13 +335,13 @@ func TestGetChannelInfo(t *testing.T) {
 func TestCreateAccount_UsesFirstFreeSlotAfterReserved(t *testing.T) {
 	s := NewState("admin", "password")
 
-	id, err := s.CreateAccount("mtfuser", "secret", 2, true)
+	id, err := s.CreateAccount("foobar", "secret", 2, true)
 	require.NoError(t, err)
 	assert.Equal(t, uint8(3), id, "slot 1 is reserved and slot 2 holds admin")
 
 	a, ok := s.Account(id)
 	require.True(t, ok)
-	assert.Equal(t, Account{ID: 3, Name: "mtfuser", Privilege: 2, Enabled: true}, a)
+	assert.Equal(t, Account{ID: 3, Name: "foobar", Privilege: 2, Enabled: true}, a)
 	access, err := s.GetUserAccess(1, id)
 	require.NoError(t, err)
 	assert.True(t, access.IPMIMessaging)
@@ -371,25 +371,25 @@ func TestCreateAccount_Errors(t *testing.T) {
 
 func TestAccounts_ListsPopulatedSlotsOnly(t *testing.T) {
 	s := NewState("admin", "password")
-	_, err := s.CreateAccount("mtfuser", "secret", 3, false)
+	_, err := s.CreateAccount("foobar", "secret", 3, false)
 	require.NoError(t, err)
 
 	accounts := s.Accounts()
 	require.Len(t, accounts, 2)
 	assert.Equal(t, "admin", accounts[0].Name)
 	assert.Equal(t, uint8(2), accounts[0].ID)
-	assert.Equal(t, Account{ID: 3, Name: "mtfuser", Privilege: 3, Enabled: false}, accounts[1])
+	assert.Equal(t, Account{ID: 3, Name: "foobar", Privilege: 3, Enabled: false}, accounts[1])
 }
 
 func TestUpdateAccount(t *testing.T) {
 	s := NewState("admin", "password")
-	id, err := s.CreateAccount("mtfuser", "old", 2, true)
+	id, err := s.CreateAccount("foobar", "old", 2, true)
 	require.NoError(t, err)
 
 	newPass := "new"
 	require.NoError(t, s.UpdateAccount(id, AccountUpdate{Password: &newPass}))
-	assert.True(t, s.Authenticate("mtfuser", "new"))
-	assert.False(t, s.Authenticate("mtfuser", "old"))
+	assert.True(t, s.Authenticate("foobar", "new"))
+	assert.False(t, s.Authenticate("foobar", "old"))
 
 	priv, disabled := uint8(4), false
 	require.NoError(t, s.UpdateAccount(id, AccountUpdate{Privilege: &priv, Enabled: &disabled}))
@@ -408,13 +408,13 @@ func TestUpdateAccount(t *testing.T) {
 
 func TestDeleteAccount_FreesSlot(t *testing.T) {
 	s := NewState("admin", "password")
-	id, err := s.CreateAccount("mtfuser", "secret", 2, true)
+	id, err := s.CreateAccount("foobar", "secret", 2, true)
 	require.NoError(t, err)
 
 	require.NoError(t, s.DeleteAccount(id))
 	_, ok := s.Account(id)
 	assert.False(t, ok)
-	assert.False(t, s.Authenticate("mtfuser", "secret"))
+	assert.False(t, s.Authenticate("foobar", "secret"))
 	assert.ErrorIs(t, s.DeleteAccount(id), ErrNotFound)
 
 	reused, err := s.CreateAccount("other", "x", 2, true)

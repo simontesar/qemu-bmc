@@ -79,7 +79,7 @@ func TestCreateAccount(t *testing.T) {
 	srv := NewServer(newMockMachine(qmp.StatusRunning), "admin", "password", "")
 
 	w := doAccountRequest(srv, "POST", "/redfish/v1/AccountService/Accounts",
-		`{"UserName":"mtfuser","Password":"Abc123!x","RoleId":"ReadOnly"}`, "admin", "password")
+		`{"UserName":"foobar","Password":"Abc123!x","RoleId":"ReadOnly"}`, "admin", "password")
 	require.Equal(t, http.StatusCreated, w.Code)
 	assert.Equal(t, "/redfish/v1/AccountService/Accounts/3", w.Header().Get("Location"))
 
@@ -88,7 +88,7 @@ func TestCreateAccount(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acc))
 	assert.Equal(t, "/redfish/v1/AccountService/Accounts/3", acc.ODataID)
 	assert.Equal(t, "3", acc.ID)
-	assert.Equal(t, "mtfuser", acc.UserName)
+	assert.Equal(t, "foobar", acc.UserName)
 	assert.Equal(t, "ReadOnly", acc.RoleID)
 	assert.True(t, acc.Enabled, "Enabled defaults to true")
 	assert.Nil(t, acc.Password)
@@ -148,7 +148,7 @@ func TestCreateAccount_NoFreeSlot(t *testing.T) {
 func TestPatchAccount(t *testing.T) {
 	srv := NewServer(newMockMachine(qmp.StatusRunning), "admin", "password", "")
 	w := doAccountRequest(srv, "POST", "/redfish/v1/AccountService/Accounts",
-		`{"UserName":"mtfuser","Password":"old","RoleId":"ReadOnly"}`, "admin", "password")
+		`{"UserName":"foobar","Password":"old","RoleId":"ReadOnly"}`, "admin", "password")
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	w = doAccountRequest(srv, "PATCH", "/redfish/v1/AccountService/Accounts/3",
@@ -158,7 +158,7 @@ func TestPatchAccount(t *testing.T) {
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acc))
 	assert.Equal(t, "Operator", acc.RoleID)
 	assert.False(t, acc.Enabled)
-	assert.Equal(t, "mtfuser", acc.UserName)
+	assert.Equal(t, "foobar", acc.UserName)
 
 	tests := []struct {
 		name string
@@ -177,7 +177,7 @@ func TestPatchAccount(t *testing.T) {
 	}
 	srv2 := NewServer(newMockMachine(qmp.StatusRunning), "admin", "password", "")
 	doAccountRequest(srv2, "POST", "/redfish/v1/AccountService/Accounts",
-		`{"UserName":"mtfuser","Password":"old","RoleId":"ReadOnly"}`, "admin", "password")
+		`{"UserName":"foobar","Password":"old","RoleId":"ReadOnly"}`, "admin", "password")
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			w := doAccountRequest(srv2, "PATCH", tt.path, tt.body, "admin", "password")
@@ -190,7 +190,7 @@ func TestPatchAccount(t *testing.T) {
 func TestDeleteAccount(t *testing.T) {
 	srv := NewServer(newMockMachine(qmp.StatusRunning), "admin", "password", "")
 	w := doAccountRequest(srv, "POST", "/redfish/v1/AccountService/Accounts",
-		`{"UserName":"mtfuser","Password":"x","RoleId":"ReadOnly"}`, "admin", "password")
+		`{"UserName":"foobar","Password":"x","RoleId":"ReadOnly"}`, "admin", "password")
 	require.Equal(t, http.StatusCreated, w.Code)
 
 	w = doAccountRequest(srv, "DELETE", "/redfish/v1/AccountService/Accounts/3", "", "admin", "password")
@@ -215,27 +215,27 @@ func TestAccountLifecycle_MetalOperatorFlow(t *testing.T) {
 	require.Equal(t, http.StatusOK, doAccountRequest(srv, "GET", svcPath+"/Accounts", "", "admin", "password").Code)
 
 	// The new user cannot log in before it exists.
-	assert.Equal(t, http.StatusUnauthorized, doAccountRequest(srv, "GET", svcPath, "", "mtfuser", "Abc123!x").Code)
+	assert.Equal(t, http.StatusUnauthorized, doAccountRequest(srv, "GET", svcPath, "", "foobar", "Abc123!x").Code)
 
 	// CreateOrUpdateAccount: POST
 	w := doAccountRequest(srv, "POST", svcPath+"/Accounts",
-		`{"UserName":"mtfuser","Password":"Abc123!x","RoleId":"ReadOnly","Enabled":true}`, "admin", "password")
+		`{"UserName":"foobar","Password":"Abc123!x","RoleId":"ReadOnly","Enabled":true}`, "admin", "password")
 	require.Equal(t, http.StatusCreated, w.Code)
 	var acc ManagerAccount
 	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &acc))
 
 	// bmcConnectionTest: log in as the new account and read the AccountService.
-	assert.Equal(t, http.StatusOK, doAccountRequest(srv, "GET", svcPath, "", "mtfuser", "Abc123!x").Code)
+	assert.Equal(t, http.StatusOK, doAccountRequest(srv, "GET", svcPath, "", "foobar", "Abc123!x").Code)
 
 	// Password rotation: CreateOrUpdateAccount PATCHes only the changed field.
 	w = doAccountRequest(srv, "PATCH", acc.ODataID, `{"Password":"Xyz789?q"}`, "admin", "password")
 	require.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, http.StatusUnauthorized, doAccountRequest(srv, "GET", svcPath, "", "mtfuser", "Abc123!x").Code)
-	assert.Equal(t, http.StatusOK, doAccountRequest(srv, "GET", svcPath, "", "mtfuser", "Xyz789?q").Code)
+	assert.Equal(t, http.StatusUnauthorized, doAccountRequest(srv, "GET", svcPath, "", "foobar", "Abc123!x").Code)
+	assert.Equal(t, http.StatusOK, doAccountRequest(srv, "GET", svcPath, "", "foobar", "Xyz789?q").Code)
 
 	// DeleteAccount: DELETE the account's @odata.id.
 	require.Equal(t, http.StatusNoContent, doAccountRequest(srv, "DELETE", acc.ODataID, "", "admin", "password").Code)
-	assert.Equal(t, http.StatusUnauthorized, doAccountRequest(srv, "GET", svcPath, "", "mtfuser", "Xyz789?q").Code)
+	assert.Equal(t, http.StatusUnauthorized, doAccountRequest(srv, "GET", svcPath, "", "foobar", "Xyz789?q").Code)
 
 	// Only the bootstrap admin remains.
 	w = doAccountRequest(srv, "GET", svcPath+"/Accounts", "", "admin", "password")
