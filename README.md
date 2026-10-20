@@ -209,6 +209,13 @@ ipmitool user enable 3
 | GET | `/redfish/v1/EventService/Subscriptions/{id}` | Event subscription resource |
 | DELETE | `/redfish/v1/EventService/Subscriptions/{id}` | Delete subscription |
 | POST | `/redfish/v1/EventService/Actions/EventService.SubmitTestEvent` | Push a test event to all `Event` subscriptions |
+| GET | `/redfish/v1/UpdateService` | Update service (`SimpleUpdate` over `HTTP`/`HTTPS`) |
+| GET | `/redfish/v1/UpdateService/FirmwareInventory` | Installed and staged BIOS/BMC firmware |
+| GET | `/redfish/v1/UpdateService/FirmwareInventory/{id}` | Firmware inventory item (`Version`, `Staged`) |
+| POST | `/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate` | Install a firmware package (`ImageURI`, `TransferProtocol`, `Username`, `Password`, `Targets`, `@Redfish.OperationApplyTime`) |
+| GET | `/redfish/v1/TaskService` | Task service |
+| GET | `/redfish/v1/TaskService/Tasks` | Task collection |
+| GET | `/redfish/v1/TaskService/Tasks/{id}` | Task resource (`TaskState`, `TaskStatus`, `PercentComplete`, `Messages`) |
 | GET | `/novnc/` | Redirect to noVNC UI |
 | GET | `/novnc/vnc.html` | Browser-based VNC console |
 | GET | `/websockify` | WebSocket-to-VNC proxy |
@@ -216,6 +223,8 @@ ipmitool user enable 3
 Redfish accounts share the 15-slot IPMI user table: an account's `Id` is its IPMI user ID, Redfish basic auth checks the same table, and accounts created via Redfish, out-of-band IPMI or in-band IPMI are visible to all three. `RoleId` maps to the IPMI privilege level (`Administrator`=4, `Operator`=3, `ReadOnly`=2). User names are limited to 16 bytes and passwords to 20 bytes.
 
 Event subscriptions live in memory and are lost when qemu-bmc restarts, like on a BMC reboot. Creating a second subscription with the same `Destination` and `EventFormatType` fails with `ResourceAlreadyExists`. `SubmitTestEvent` POSTs an `#Event.v1_7_0.Event` payload, carrying the subscription's `Context`, to every `Event`-format subscription; failed deliveries are retried 3 times at 5-second intervals, and https destinations are not certificate-verified. `MetricReport` subscriptions are accepted but no metric reports are pushed.
+
+Firmware updates install qemu-bmc firmware packages, small JSON documents that name the component they update, e.g. `{"Component": "BIOS", "Version": "1.1.0"}` (`Component` is `BIOS` or `BMC`). The package declares its component because clients such as metal-operator's Dell client send `SimpleUpdate` without `Targets`; when `Targets` is given (an `Installed-*` inventory entry, `/redfish/v1/Systems/1` or `/redfish/v1/Managers/1`) it must match the package. `SimpleUpdate` answers `202 Accepted` with the task in the `Location` header and body; the task downloads the package from `ImageURI` (basic auth from `Username`/`Password`), simulates flashing for `FIRMWARE_UPDATE_DURATION` and ends `Completed`, or `Exception` when the download fails or the package is invalid. Like on a real BMC the new version is staged first: the inventory lists a `Staged-*` entry with `Staged: true` until the next power-on `ComputerSystem.Reset` (BIOS) or `Manager.Reset` (BMC) activates it, which then shows in `ComputerSystem.BiosVersion` or `Manager.FirmwareVersion`. Inventory ids follow Dell iDRAC (`Installed-BIOS.Setup.1-1`, `Installed-iDRAC.Embedded.1-1`) so Dell clients find them. `@Redfish.OperationApplyTime` `Immediate` and `OnReset` both behave this way. Versions and tasks live in memory: a restart reverts to `SYSTEM_BIOS_VERSION` and `SYSTEM_FIRMWARE_VERSION`.
 
 ## IPMI Commands
 
@@ -248,6 +257,11 @@ Event subscriptions live in memory and are lost when qemu-bmc restarts, like on 
 | `POWER_ON_AT_START` | `false` | Power on VM automatically at startup (useful for non-MAAS setups) |
 | `GRACEFUL_SHUTDOWN_TIMEOUT` | `120s` | How long GracefulShutdown/GracefulRestart wait for the guest to exit after an ACPI powerdown request before falling back to a hard kill (process management mode only) |
 | `ENABLE_DELL_BMC_ATTRIBUTES` | `false` | Expose the Dell iDRAC-style Manager attribute surface |
+| `SYSTEM_BIOS_VERSION` | `1.0.0` | Initial `ComputerSystem.BiosVersion` |
+| `SYSTEM_FIRMWARE_VERSION` | `1.0.0` | Initial `Manager.FirmwareVersion` |
+| `FIRMWARE_UPDATE_DURATION` | `20s` | Simulated flash time of a firmware update after the package download |
+| `FIRMWARE_DOWNLOAD_TIMEOUT` | `30s` | Timeout for downloading a firmware package |
+| `FIRMWARE_DOWNLOAD_INSECURE_TLS` | `true` | Skip certificate verification for `HTTPS` image URIs |
 
 ### Container Configuration
 
