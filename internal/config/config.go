@@ -53,6 +53,12 @@ type Config struct {
 	// kill. Guests without a working ACPI power-button handler never react,
 	// so this is the worst-case latency of every graceful reset against them.
 	GracefulShutdownTimeout time.Duration
+	// Firmware updates (UpdateService.SimpleUpdate): the simulated flash time
+	// after the package download, the download timeout, and whether HTTPS
+	// image URIs are fetched without certificate verification.
+	FirmwareUpdateDuration      time.Duration
+	FirmwareDownloadTimeout     time.Duration
+	FirmwareDownloadInsecureTLS bool
 }
 
 // Load reads configuration from environment variables with defaults
@@ -93,6 +99,10 @@ func Load() *Config {
 		CPUCount:                getIntEnv("VM_CPUS", 2),
 		MemoryMiB:               getIntEnv("VM_MEMORY", 2048),
 		GracefulShutdownTimeout: getDurationEnv("GRACEFUL_SHUTDOWN_TIMEOUT", 120*time.Second),
+
+		FirmwareUpdateDuration:      getDurationEnv("FIRMWARE_UPDATE_DURATION", 20*time.Second),
+		FirmwareDownloadTimeout:     getDurationEnv("FIRMWARE_DOWNLOAD_TIMEOUT", 30*time.Second),
+		FirmwareDownloadInsecureTLS: getBoolEnv("FIRMWARE_DOWNLOAD_INSECURE_TLS", true),
 	}
 }
 

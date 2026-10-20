@@ -10,6 +10,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/tjst-t/qemu-bmc/internal/bmc"
 	"github.com/tjst-t/qemu-bmc/internal/events"
+	"github.com/tjst-t/qemu-bmc/internal/firmware"
 	"github.com/tjst-t/qemu-bmc/internal/machine"
 	"github.com/tjst-t/qemu-bmc/internal/novnc"
 	"github.com/tjst-t/qemu-bmc/internal/qmp"
@@ -28,7 +29,8 @@ type MachineInterface interface {
 
 // Inventory holds the static ComputerSystem/Manager/Processor inventory data
 // surfaced by the Redfish API. It's set once via SetInventory before the server
-// starts handling requests, so it needs no locking.
+// starts handling requests, so it needs no locking. The BIOS and BMC firmware
+// versions are only the initial ones: firmware updates change them at runtime.
 type Inventory struct {
 	// ComputerSystem inventory surfaced at /redfish/v1/Systems/1.
 	SystemUUID         string
@@ -80,8 +82,17 @@ type Server struct {
 	subscriptions      map[string]EventDestination
 	nextSubscriptionID int
 	nextEventID        int
+	// firmwareVersions holds the active BIOS/BMC versions, stagedFirmware the
+	// versions installed by an update but not yet activated by a reset.
+	firmwareVersions map[firmware.Component]string
+	stagedFirmware   map[firmware.Component]string
+	tasks            map[string]Task
+	nextTaskID       int
 
 	eventDispatcher *events.Dispatcher
+	// firmwareUpdater runs SimpleUpdate tasks. It's set once via
+	// SetFirmwareUpdater before the server starts handling requests.
+	firmwareUpdater *firmware.Updater
 }
 
 // SetInventory populates the static ComputerSystem/Manager/Processor inventory
@@ -89,12 +100,22 @@ type Server struct {
 // non-empty ComputerSystem UUID for server discovery.
 func (s *Server) SetInventory(inv Inventory) {
 	s.inventory = inv
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.firmwareVersions[firmware.ComponentBIOS] = inv.SystemBiosVersion
+	s.firmwareVersions[firmware.ComponentBMC] = inv.ManagerFirmwareVersion
 }
 
 // SetUserStore shares the BMC user table (also used by IPMI) with the Redfish
 // server, so basic auth and the AccountService operate on the same accounts.
 func (s *Server) SetUserStore(users *bmc.State) {
 	s.users = users
+}
+
+// SetFirmwareUpdater replaces the updater running SimpleUpdate tasks, e.g. to
+// configure download timeouts and the simulated flash duration.
+func (s *Server) SetFirmwareUpdater(u *firmware.Updater) {
+	s.firmwareUpdater = u
 }
 
 // SetDebug enables debug mode.
@@ -222,6 +243,39 @@ func (s *Server) applyPendingBiosSettings() map[string]any {
 	return applied
 }
 
+func (s *Server) getFirmwareVersion(c firmware.Component) string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.firmwareVersions[c]
+}
+
+func (s *Server) getStagedFirmware(c firmware.Component) (string, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	v, ok := s.stagedFirmware[c]
+	return v, ok
+}
+
+func (s *Server) stageFirmware(c firmware.Component, version string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.stagedFirmware[c] = version
+}
+
+// activateStagedFirmware makes a staged version the active one and returns it.
+// Called on the reset that activates the component's firmware.
+func (s *Server) activateStagedFirmware(c firmware.Component) (string, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	v, ok := s.stagedFirmware[c]
+	if !ok {
+		return "", false
+	}
+	s.firmwareVersions[c] = v
+	delete(s.stagedFirmware, c)
+	return v, true
+}
+
 // NewServer creates a new Redfish server
 func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 	s := &Server{
@@ -245,10 +299,14 @@ func NewServer(m MachineInterface, user, pass, vncAddr string) *Server {
 			"SysLog.1.SysLogServer1": "",
 			"NTPConfigGroup.1.NTP1":  "",
 		},
-		bootOrder:     []string{"Pxe", "Hdd", "Cd"},
-		subscriptions: map[string]EventDestination{},
+		bootOrder:        []string{"Pxe", "Hdd", "Cd"},
+		subscriptions:    map[string]EventDestination{},
+		firmwareVersions: map[firmware.Component]string{},
+		stagedFirmware:   map[firmware.Component]string{},
+		tasks:            map[string]Task{},
 	}
 	s.eventDispatcher = events.NewDispatcher(deliveryRetryAttempts, deliveryRetryIntervalSeconds*time.Second, s.debugf)
+	s.firmwareUpdater = firmware.NewUpdater(defaultFirmwareDownloadTimeout, defaultFirmwareUpdateDuration, true)
 	s.setupRoutes()
 	return s
 }
@@ -354,6 +412,24 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/redfish/v1/EventService/Subscriptions/{id}/", s.handleDeleteSubscription).Methods("DELETE")
 	s.router.HandleFunc("/redfish/v1/EventService/Actions/EventService.SubmitTestEvent", s.handleSubmitTestEvent).Methods("POST")
 	s.router.HandleFunc("/redfish/v1/EventService/Actions/EventService.SubmitTestEvent/", s.handleSubmitTestEvent).Methods("POST")
+
+	// UpdateService
+	s.router.HandleFunc("/redfish/v1/UpdateService", s.handleGetUpdateService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/UpdateService/", s.handleGetUpdateService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/UpdateService/FirmwareInventory", s.handleFirmwareInventoryCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/UpdateService/FirmwareInventory/", s.handleFirmwareInventoryCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/UpdateService/FirmwareInventory/{id}", s.handleGetFirmwareInventory).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/UpdateService/FirmwareInventory/{id}/", s.handleGetFirmwareInventory).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate", s.handleSimpleUpdate).Methods("POST")
+	s.router.HandleFunc("/redfish/v1/UpdateService/Actions/UpdateService.SimpleUpdate/", s.handleSimpleUpdate).Methods("POST")
+
+	// TaskService
+	s.router.HandleFunc("/redfish/v1/TaskService", s.handleGetTaskService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/TaskService/", s.handleGetTaskService).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/TaskService/Tasks", s.handleTaskCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/TaskService/Tasks/", s.handleTaskCollection).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/TaskService/Tasks/{id}", s.handleGetTask).Methods("GET")
+	s.router.HandleFunc("/redfish/v1/TaskService/Tasks/{id}/", s.handleGetTask).Methods("GET")
 
 	// Chassis
 	s.router.HandleFunc("/redfish/v1/Chassis", s.handleChassisCollection).Methods("GET")

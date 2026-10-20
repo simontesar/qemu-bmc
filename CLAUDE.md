@@ -19,6 +19,7 @@ internal/
   ipmi/                        # UDP server + VM chardev server, RMCP/RMCP+, RAKP auth, chassis commands
   bmc/                         # BMC configuration state (users, LAN, channels)
   events/                      # Redfish event delivery to subscription destinations
+  firmware/                    # Firmware package download/validation for UpdateService.SimpleUpdate
   config/                      # Environment variable config
 docker/
   Dockerfile                   # Multi-stage build (Go builder + Debian runtime)
