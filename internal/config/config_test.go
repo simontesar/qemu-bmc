@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
@@ -84,4 +85,22 @@ func TestLoad_PowerOnAtStart_False(t *testing.T) {
 	defer os.Unsetenv("POWER_ON_AT_START")
 	cfg := Load()
 	assert.Equal(t, false, cfg.PowerOnAtStart)
+}
+
+func TestLoad_Firmware(t *testing.T) {
+	for _, key := range []string{"FIRMWARE_UPDATE_DURATION", "FIRMWARE_DOWNLOAD_TIMEOUT", "FIRMWARE_DOWNLOAD_INSECURE_TLS"} {
+		os.Unsetenv(key)
+	}
+	cfg := Load()
+	assert.Equal(t, 20*time.Second, cfg.FirmwareUpdateDuration)
+	assert.Equal(t, 30*time.Second, cfg.FirmwareDownloadTimeout)
+	assert.True(t, cfg.FirmwareDownloadInsecureTLS)
+
+	t.Setenv("FIRMWARE_UPDATE_DURATION", "5s")
+	t.Setenv("FIRMWARE_DOWNLOAD_TIMEOUT", "1m")
+	t.Setenv("FIRMWARE_DOWNLOAD_INSECURE_TLS", "false")
+	cfg = Load()
+	assert.Equal(t, 5*time.Second, cfg.FirmwareUpdateDuration)
+	assert.Equal(t, time.Minute, cfg.FirmwareDownloadTimeout)
+	assert.False(t, cfg.FirmwareDownloadInsecureTLS)
 }

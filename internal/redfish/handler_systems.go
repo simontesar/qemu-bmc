@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/tjst-t/qemu-bmc/internal/firmware"
 	"github.com/tjst-t/qemu-bmc/internal/machine"
 	"github.com/tjst-t/qemu-bmc/internal/qmp"
 )
@@ -50,7 +51,7 @@ func (s *Server) handleGetSystem(w http.ResponseWriter, r *http.Request) {
 		Model:        s.inventory.SystemModel,
 		SKU:          s.inventory.SystemSKU,
 		SerialNumber: s.inventory.SystemSerial,
-		BiosVersion:  s.inventory.SystemBiosVersion,
+		BiosVersion:  s.getFirmwareVersion(firmware.ComponentBIOS),
 		IndicatorLED: s.getIndicatorLED(),
 		PowerState:   powerState,
 		MemorySummary: MemorySummary{

@@ -21,6 +21,8 @@ type ServiceRoot struct {
 	Registries     ODataID `json:"Registries"`
 	AccountService ODataID `json:"AccountService"`
 	EventService   ODataID `json:"EventService"`
+	UpdateService  ODataID `json:"UpdateService"`
+	Tasks          ODataID `json:"Tasks"`
 }
 
 // SystemCollection is a collection of computer systems
@@ -548,4 +550,102 @@ type SubmitTestEventRequest struct {
 	MessageID         string          `json:"MessageId"`
 	MessageArgs       []string        `json:"MessageArgs"`
 	OriginOfCondition json.RawMessage `json:"OriginOfCondition"`
+}
+
+// UpdateService is the Redfish update service
+type UpdateService struct {
+	ODataType         string               `json:"@odata.type"`
+	ODataID           string               `json:"@odata.id"`
+	ID                string               `json:"Id"`
+	Name              string               `json:"Name"`
+	ServiceEnabled    bool                 `json:"ServiceEnabled"`
+	FirmwareInventory ODataID              `json:"FirmwareInventory"`
+	Actions           UpdateServiceActions `json:"Actions"`
+}
+
+// UpdateServiceActions contains available update service actions
+type UpdateServiceActions struct {
+	SimpleUpdate SimpleUpdateAction `json:"#UpdateService.SimpleUpdate"`
+}
+
+// SimpleUpdateAction describes the SimpleUpdate action and its parameters
+type SimpleUpdateAction struct {
+	Target                    string   `json:"target"`
+	TransferProtocolAllowable []string `json:"TransferProtocol@Redfish.AllowableValues"`
+}
+
+// SimpleUpdateRequest is the POST body for #UpdateService.SimpleUpdate
+type SimpleUpdateRequest struct {
+	ImageURI           string   `json:"ImageURI"`
+	TransferProtocol   string   `json:"TransferProtocol"`
+	Targets            []string `json:"Targets"`
+	Username           string   `json:"Username"`
+	Password           string   `json:"Password"`
+	ForceUpdate        bool     `json:"ForceUpdate"`
+	OperationApplyTime string   `json:"@Redfish.OperationApplyTime"`
+}
+
+// SoftwareInventoryCollection is a collection of software inventory items
+type SoftwareInventoryCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// SoftwareInventory is an installed or staged firmware image
+type SoftwareInventory struct {
+	ODataType   string         `json:"@odata.type"`
+	ODataID     string         `json:"@odata.id"`
+	ID          string         `json:"Id"`
+	Name        string         `json:"Name"`
+	Version     string         `json:"Version"`
+	Updateable  bool           `json:"Updateable"`
+	Staged      bool           `json:"Staged"`
+	RelatedItem []ODataID      `json:"RelatedItem"`
+	Status      ResourceStatus `json:"Status"`
+}
+
+// TaskService is the Redfish task service
+type TaskService struct {
+	ODataType      string  `json:"@odata.type"`
+	ODataID        string  `json:"@odata.id"`
+	ID             string  `json:"Id"`
+	Name           string  `json:"Name"`
+	ServiceEnabled bool    `json:"ServiceEnabled"`
+	Tasks          ODataID `json:"Tasks"`
+}
+
+// TaskCollection is a collection of tasks
+type TaskCollection struct {
+	ODataType    string    `json:"@odata.type"`
+	ODataID      string    `json:"@odata.id"`
+	Name         string    `json:"Name"`
+	MembersCount int       `json:"Members@odata.count"`
+	Members      []ODataID `json:"Members"`
+}
+
+// Task is a long-running operation such as a firmware update
+type Task struct {
+	ODataType       string    `json:"@odata.type"`
+	ODataID         string    `json:"@odata.id"`
+	ID              string    `json:"Id"`
+	Name            string    `json:"Name"`
+	TaskState       string    `json:"TaskState"`
+	TaskStatus      string    `json:"TaskStatus"`
+	PercentComplete int       `json:"PercentComplete"`
+	StartTime       string    `json:"StartTime"`
+	EndTime         string    `json:"EndTime,omitempty"`
+	TaskMonitor     string    `json:"TaskMonitor"`
+	Messages        []Message `json:"Messages"`
+}
+
+// Message is a Redfish message as used in Task.Messages
+type Message struct {
+	MessageID       string   `json:"MessageId"`
+	Message         string   `json:"Message"`
+	Severity        string   `json:"Severity"`
+	MessageSeverity string   `json:"MessageSeverity"`
+	MessageArgs     []string `json:"MessageArgs,omitempty"`
 }

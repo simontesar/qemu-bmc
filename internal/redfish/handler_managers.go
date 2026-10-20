@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/tjst-t/qemu-bmc/internal/firmware"
 )
 
 func (s *Server) handleManagerCollection(w http.ResponseWriter, r *http.Request) {
@@ -39,7 +40,7 @@ func (s *Server) handleGetManager(w http.ResponseWriter, r *http.Request) {
 		Model:           s.inventory.ManagerModel,
 		SerialNumber:    s.inventory.ManagerSerial,
 		PartNumber:      s.inventory.ManagerPartNumber,
-		FirmwareVersion: s.inventory.ManagerFirmwareVersion,
+		FirmwareVersion: s.getFirmwareVersion(firmware.ComponentBMC),
 		LastResetTime:   lastResetTime,
 		// The BMC/Manager is always running while the container is up. Clients
 		// (e.g. metal-operator bmc_controller.go) read manager.PowerState and
@@ -177,6 +178,9 @@ func (s *Server) handleManagerReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	s.setLastResetTime(time.Now().UTC())
+	if v, ok := s.activateStagedFirmware(firmware.ComponentBMC); ok {
+		s.debugf("Manager: activated staged BMC firmware %s on %s", v, req.ResetType)
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

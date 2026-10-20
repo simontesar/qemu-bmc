@@ -13,6 +13,7 @@ import (
 
 	"github.com/tjst-t/qemu-bmc/internal/bmc"
 	"github.com/tjst-t/qemu-bmc/internal/config"
+	"github.com/tjst-t/qemu-bmc/internal/firmware"
 	"github.com/tjst-t/qemu-bmc/internal/ipmi"
 	"github.com/tjst-t/qemu-bmc/internal/machine"
 	"github.com/tjst-t/qemu-bmc/internal/qemu"
@@ -108,6 +109,8 @@ func main() {
 	redfishServer.SetUserStore(bmcState)
 	redfishServer.SetDebug(cfg.Debug)
 	redfishServer.SetDellBMCAttributes(cfg.DellBMCAttributes)
+	redfishServer.SetFirmwareUpdater(firmware.NewUpdater(
+		cfg.FirmwareDownloadTimeout, cfg.FirmwareUpdateDuration, cfg.FirmwareDownloadInsecureTLS))
 	redfishServer.SetInventory(redfish.Inventory{
 		SystemUUID:             cfg.SystemUUID,
 		SystemManufacturer:     cfg.SystemManufacturer,
